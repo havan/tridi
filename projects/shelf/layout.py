@@ -7,6 +7,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+from tridi.params import ParamError
+
 from .params import ShelfParams, wall_offset
 
 MAX_BRACKET_GAP = 160.0
@@ -14,7 +16,7 @@ EDGE_MARGIN = 10.0  # holes from plate edges, window frames
 SPACER_HEIGHT = 15.0  # cleat mode: spacer at the bottom of the plate
 
 
-class LayoutError(ValueError):
+class LayoutError(ParamError):
     """The options don't fit together on a shelf of this size."""
 
 
@@ -78,11 +80,12 @@ def _brackets(p: ShelfParams, notches: list[Notch]) -> list[float]:
         lo, hi = W / 6, 5 * W / 6
     else:
         lo, hi = t / 2, W - t / 2
+        clear = 2 + (4 if p.plate_style == "pads" else 0)  # pads reach 4 mm past the bracket
         for n in notches:  # an end bracket moves inward to clear a corner notch
             if n.label == "back-left":
-                lo = n.r + 2 + t / 2
+                lo = n.r + clear + t / 2
             elif n.label == "back-right":
-                hi = W - n.r - 2 - t / 2
+                hi = W - n.r - clear - t / 2
     n = p.bracket_count or max(2, math.ceil((hi - lo) / MAX_BRACKET_GAP) + 1)
     xs = [lo + (hi - lo) * i / (n - 1) for i in range(n)]
     if hi - lo < (n - 1) * (t + 10):

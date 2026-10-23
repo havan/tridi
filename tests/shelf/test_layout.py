@@ -155,3 +155,8 @@ def test_keyhole_rows_leave_room():
     with pytest.raises(LayoutError, match="strip"):
         lay(mount="keyhole", top_screws="strip")
     assert lay(mount="keyhole", top_screws="strip", strip_height=26).holes
+
+
+def test_above_corner_notch_clears_pad():
+    l = lay(supports="above", plate_style="pads", notches=("back-right",))
+    assert l.pads[-1][1] <= 200 - 15

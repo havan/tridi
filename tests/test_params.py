@@ -87,3 +87,9 @@ def test_variant_name():
 
 def test_variant_name_preset_only():
     assert variant_name("corner", {}) == "corner"
+
+
+def test_cli_plural_option_names():
+    parser = argparse.ArgumentParser()
+    add_cli_arguments(Toy, parser)
+    assert "--notch" in parser._option_string_actions

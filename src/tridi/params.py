@@ -114,8 +114,8 @@ def resolve(cls, presets: dict[str, dict], preset: str | None, overrides: dict):
 
 
 def _option(name: str, base: type) -> str:
-    if base is tuple and name.endswith("s"):
-        name = name[:-1]
+    if base is tuple:  # a repeatable option is named in the singular: notches -> --notch
+        name = re.sub(r"(ch|sh|ss|x)es$", r"\1", name) if re.search(r"(ch|sh|ss|x)es$", name) else name.removesuffix("s")
     return "--" + name.replace("_", "-")
 
 
