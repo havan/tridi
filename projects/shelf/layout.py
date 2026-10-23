@@ -116,7 +116,8 @@ def _hole_rows(p: ShelfParams, plate_z: tuple[float, float]) -> list[float]:
         z_top = top / 2 if top > 0 else slab_bottom - EDGE_MARGIN
         z_bottom = bottom + EDGE_MARGIN
     else:
-        z_top, z_bottom = top - EDGE_MARGIN, EDGE_MARGIN
+        # the screwdriver comes in over the shelf: keep the bottom row above a front lip
+        z_top, z_bottom = top - EDGE_MARGIN, max(EDGE_MARGIN, p.front_lip + 5)
     if z_top - z_bottom < hd + 4:
         raise LayoutError("the back plate is too short for two rows of screw holes; "
                           "raise --bracket-height or use --mount cleat/adhesive")
@@ -240,7 +241,7 @@ def plan(p: ShelfParams) -> Layout:
     if p.plate_style == "pads":
         t, hd = p.bracket_thickness, p.screw_head_d
         cols = _hole_columns(p, brackets)
-        pads = [(min(c - t / 2 - 4, x - hd / 2 - 6), max(c + t / 2 + 4, x + hd / 2 + 6))
+        pads = [(max(0.0, min(c - t / 2 - 4, x - hd / 2 - 6)), min(p.width, max(c + t / 2 + 4, x + hd / 2 + 6)))
                 for c, x in zip(brackets, cols)]
     if p.mount == "cleat":
         cleat_bottom = plate_z[1] - hook_height + p.cleat_thickness - p.cleat_height

@@ -26,7 +26,9 @@ def test_max_reach():
     with pytest.raises(ParamError, match="top-screws strip"):
         effective(ShelfParams(depth=160))
     effective(ShelfParams(depth=160, top_screws="strip"))
-    effective(ShelfParams(depth=160, supports="above"))
+    effective(ShelfParams(depth=160, mount="keyhole"))
+    with pytest.raises(ParamError, match="reach across"):
+        effective(ShelfParams(depth=160, supports="above"))
 
 
 def test_max_reach_counts_lip():

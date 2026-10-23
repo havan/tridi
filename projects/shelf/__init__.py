@@ -10,7 +10,7 @@ from tridi.printers import Printer
 
 from .body import PRINT_ROTATION, build_body
 from .cleat import build_cleat
-from .clip import CLIP_ROTATION, build_clip
+from .clip import CLIP_ROTATION, build_clip, clip_spot
 from .layout import plan
 from .params import ShelfParams, effective
 
@@ -30,11 +30,9 @@ def build(p: ShelfParams, printer: Printer) -> tuple[list[PrintPart], list[str]]
         parts.append(PrintPart("cleat", build_cleat(p, lay), FreeCAD.Rotation(Vector(1, 0, 0), 90),
                                orientation="lying on its back"))
     if p.clips:
-        # shown in the assembly on the right-hand edge, near the front (fits with or without a lip)
-        to_side = FreeCAD.Rotation(Vector(0, 0, 1), 90)
+        spot = clip_spot(p, lay)  # refuses when no edge is free; the assembly shows the clip there
         clip = build_clip(p, printer.clearance)
-        clip.transformShape(to_side.toMatrix())
-        clip.translate(Vector(p.width, p.depth - 15, 0))
-        parts.append(PrintPart("clip", clip, CLIP_ROTATION.multiply(to_side.inverted()), count=p.clips,
+        clip.transformShape(spot.toMatrix())
+        parts.append(PrintPart("clip", clip, CLIP_ROTATION.multiply(spot.Rotation.inverted()), count=p.clips,
                                orientation="standing on its back"))
     return parts, notes

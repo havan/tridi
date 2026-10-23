@@ -4,7 +4,7 @@ Date: 2026-10-23. Status: approved by the user 2026-10-23.
 
 ## Intent
 
-Small wall shelves for a living room, holding devices while they charge: phones, PS4
+Small wall shelves holding devices while they charge: phones, PS4
 controllers, chargers. A power strip with USB ports is fixed to the wall just below, so
 charging cables come **up the wall from below** onto the shelf.
 
@@ -18,7 +18,7 @@ repo is laid out for many projects with shared code.
 - One command produces print-ready files for any combination of the options below, at any size
   that fits the chosen printer.
 - Every variant prints in PLA on a common FDM printer **without support material**.
-- Holds small electronics reliably on a painted plaster-over-brick wall with plastic dowels, or
+- Holds small electronics reliably on a painted, plastered masonry wall with plastic dowels, or
   with tape or hot glue.
 - Uses as little plastic as the user asks for: material-saving modes, and a volume/weight report
   for every build.
@@ -51,7 +51,7 @@ repo is laid out for many projects with shared code.
   interactive inspection and iteration. **The scripts are the source of truth.** Nothing is
   designed only in the GUI.
 - Material is PLA. Warm phones while charging are fine (well below PLA's ~55–60 °C softening).
-- Wall: brick with gypsum plaster ("alçı sıva") and paint. Plastic dowels.
+- Reference wall: painted plaster over masonry, with plastic dowels.
 - Reference printer: Prusa i3 MK3S (250 × 210 × 210 mm), but nothing may be specific to it.
 - Platforms (my call): `pixi.toml` declares linux-64, osx-arm64 and win-64 (conda-forge ships
   FreeCAD for all three). Only Linux is tested, and the README says so. Code uses `pathlib` and no

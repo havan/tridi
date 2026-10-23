@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parent
 sys.path[:0] = [str(ROOT / "src"), str(ROOT)]
 
 import tridi  # noqa: E402,F401
+import Part  # noqa: E402
 from tridi.export import export  # noqa: E402
 from tridi.features import GeometryError  # noqa: E402
 from tridi.params import ParamError, add_cli_arguments, cli_overrides, load_presets, resolve, variant_name  # noqa: E402
@@ -64,6 +65,9 @@ def main(argv: list[str] | None = None) -> int:
         return build(argv[1:])
     except (ParamError, FitError, GeometryError) as e:  # projects raise subclasses of these
         print(f"error: {e}", file=sys.stderr)
+        return 2
+    except Part.OCCError as e:
+        print(f"error: the geometry kernel failed ({e}); try less extreme values", file=sys.stderr)
         return 2
 
 

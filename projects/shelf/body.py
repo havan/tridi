@@ -44,7 +44,7 @@ def _lip(p: ShelfParams, lay: Layout) -> Part.Shape:
     """Low lip along the front edge. Its inner face slopes at 45° so it prints without supports."""
     h, d = p.front_lip, p.depth
     lip = mounting.yz_prism([(d - h - 2, 0), (d, 0), (d, h), (d - 2, h)], 0, p.width)
-    lip = lip.makeFillet(0.9, _edges(lip, z=h))
+    lip = lip.makeFillet(min(0.9, 0.4 * h), _edges(lip, z=h))
     # trim the ends to the slab's rounded front corners
     r = min(p.edge_radius, 0.45 * p.slab_thickness)
     outline = Part.makeBox(p.width, d, h + 1, Vector(0, 0, -0.5))
@@ -59,7 +59,7 @@ def _plate_piece(p: ShelfParams, x0: float, x1: float, z0: float, z1: float, fre
     piece = Part.makeBox(x1 - x0, t, z1 - z0, Vector(x0, off, z0))
     if chamfer and p.bed_chamfer > 0 and off == 0:
         piece = piece.makeChamfer(p.bed_chamfer, _edges(piece, y=0))
-    r = min(p.edge_radius, 0.9 * t)
+    r = min(p.edge_radius, 0.9 * t, t - p.bed_chamfer - 0.3)  # leave room for the chamfer on the far edge
     if r > 0 and free_ends:
         piece = piece.makeFillet(r, [e for z in free_ends for e in _edges(piece, y=off + t, z=z)])
     return piece
@@ -125,6 +125,15 @@ def _bracket_profile(depth: float, height: float, web: float) -> Part.Shape:
 def _brackets(p: ShelfParams, lay: Layout) -> list[Part.Shape]:
     profile = _bracket_profile(bracket_depth(p), p.bracket_height, p.bracket_web)
     solid = profile.extrude(Vector(0, 0, p.bracket_thickness))
+    if p.orientation == "side":
+        # printed on its end, a bracket's lower face is a ceiling: add a 45° taper under it that meets
+        # the slab and plate (in local coordinates, distance from them is min(u, v))
+        L = max(bracket_depth(p), p.bracket_height) + 1
+        along_u = Part.Face(Part.makePolygon([Vector(0, 0, 0), Vector(L, 0, 0), Vector(L, 0, -L), Vector(0, 0, 0)]))
+        along_v = Part.Face(Part.makePolygon([Vector(0, 0, 0), Vector(0, L, 0), Vector(0, L, -L), Vector(0, 0, 0)]))
+        taper = (profile.extrude(Vector(0, 0, -L)).common(along_u.extrude(Vector(0, L, 0)))
+                 .common(along_v.extrude(Vector(L, 0, 0))))
+        solid = solid.fuse(taper).removeSplitter()
     y0 = wall_offset(p) + p.plate_thickness
     out = []
     for c in lay.brackets:
@@ -133,7 +142,10 @@ def _brackets(p: ShelfParams, lay: Layout) -> list[Part.Shape]:
             m = FreeCAD.Matrix(0, 0, 1, x0, 1, 0, 0, y0, 0, -1, 0, lay.slab_z[0], 0, 0, 0, 1)
         else:  # v -> up from the slab top
             m = FreeCAD.Matrix(0, 0, 1, x0, 1, 0, 0, y0, 0, 1, 0, lay.slab_z[1], 0, 0, 0, 1)
-        out.append(solid.transformGeometry(m))
+        b = solid.transformGeometry(m)
+        if p.orientation == "side":  # a taper never reaches past the shelf's ends
+            b = b.common(Part.makeBox(p.width, 1e4, 1e4, Vector(0, -5e3, -5e3)))
+        out.append(b)
     return out
 
 

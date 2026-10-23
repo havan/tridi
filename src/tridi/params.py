@@ -84,12 +84,32 @@ def _convert(name: str, base: type, optional: bool, value):
         raise ParamError(f"{name} = {value!r} is not a valid {base.__name__}") from None
 
 
+def _read_toml(path: Path) -> dict:
+    try:
+        return tomllib.loads(path.read_text())
+    except tomllib.TOMLDecodeError as e:
+        raise ParamError(f"{path.name}: {e}") from None
+
+
+def _tables(path: Path, data: dict, example: str) -> None:
+    for key, value in data.items():
+        if not isinstance(value, dict):
+            raise ParamError(f"{path.name}: {key!r} must be a table of parameters, like {example}")
+
+
 def load_presets(project_file: Path, local_file: Path, project: str) -> dict[str, dict]:
     presets: dict[str, dict] = {}
     if project_file.exists():
-        presets.update(tomllib.loads(project_file.read_text()))
+        data = _read_toml(project_file)
+        _tables(project_file, data, "[corner]")
+        presets.update(data)
     if local_file.exists():
-        for name, values in tomllib.loads(local_file.read_text()).get(project, {}).items():
+        data = _read_toml(local_file)
+        for key, section in data.items():  # each top-level table is a project, holding preset tables
+            if not isinstance(section, dict) or not all(isinstance(v, dict) for v in section.values()):
+                raise ParamError(f"{local_file.name}: [{key}] holds values directly; presets go in tables "
+                                 f"named [<project>.<preset>], e.g. [{project}.{key}]")
+        for name, values in data.get(project, {}).items():
             presets[name] = {**presets.get(name, {}), **values}
     return presets
 

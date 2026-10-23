@@ -11,3 +11,5 @@ __pycache__/
 # personal presets
 local.toml
 .claude/settings.local.json
+# agent scratch (plans, ledgers)
+.superpowers/

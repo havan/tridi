@@ -11,7 +11,8 @@ from FreeCAD import Vector
 
 from tridi.features import assert_single_solid, fuse_all
 
-from .params import ShelfParams
+from .layout import Layout, LayoutError
+from .params import ShelfParams, bracket_depth, wall_offset
 
 CLIP_WIDTH = 10.0
 WALL = 1.6
@@ -35,6 +36,30 @@ def ring_axis(p: ShelfParams, clearance: float) -> tuple[tuple[float, float], tu
     """((x, z) of the cable ring's axis, (y0, y1) of its length)."""
     z, _, _ = _ring(p, clearance)
     return (CLIP_WIDTH / 2, z), (-WALL, clip_grip_depth(p))
+
+
+def clip_spot(p: ShelfParams, lay: Layout) -> FreeCAD.Placement:
+    """Where a clip fits on the shelf: placement from clip-local to use coordinates.
+
+    Without a lip: the front edge, in the widest gap between brackets. With a lip: the right-hand edge,
+    between whatever is at the back (plate, corner notch, an end bracket) and the lip."""
+    g, t = clip_grip_depth(p), p.bracket_thickness
+    if not p.front_lip:
+        edges = [0.0] + [x for c in lay.brackets for x in (c - t / 2, c + t / 2)] + [p.width]
+        a, b = max(zip(edges[::2], edges[1::2]), key=lambda s: s[1] - s[0])
+        if b - a >= CLIP_WIDTH + 2:
+            x = (a + b) / 2 + CLIP_WIDTH / 2
+            return FreeCAD.Placement(Vector(x, p.depth, 0), FreeCAD.Rotation(Vector(0, 0, 1), 180))
+    y_lo = wall_offset(p) + p.plate_thickness + 1
+    if "back-right" in p.notches:
+        y_lo = max(y_lo, wall_offset(p) + p.corner_notch_r + 1)
+    if any(c + t / 2 > p.width - g - 1 for c in lay.brackets):  # a bracket along the right-hand edge
+        y_lo = max(y_lo, wall_offset(p) + p.plate_thickness + bracket_depth(p) + 1)
+    y_hi = p.depth - (p.front_lip + 2 if p.front_lip else 0) - 1
+    if y_hi - y_lo < CLIP_WIDTH:
+        raise LayoutError(f"no free edge for the clips: the side edge has {max(0.0, y_hi - y_lo):.1f} mm between "
+                          f"the brackets and the lip, a clip needs {CLIP_WIDTH:g}; drop --clips or the lip")
+    return FreeCAD.Placement(Vector(p.width, y_lo, 0), FreeCAD.Rotation(Vector(0, 0, 1), 90))
 
 
 def build_clip(p: ShelfParams, clearance: float) -> Part.Shape:

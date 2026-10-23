@@ -34,7 +34,8 @@ def test_grid(supports, mount, plate_style, surface):
 
 def test_everything_on():
     p = ShelfParams(supports="above", mount="cleat", plate_style="windowed", surface="honeycomb",
-                    notches=("back-left", "back@150"), front_lip=6, clips=2)
+                    notches=("back-left", "back@150"), front_lip=6, clips=2,
+                    bracket_depth=60)  # leaves room on the side edge for the clips between bracket and lip
     parts, _ = build(p, MK3S)
     assert [x.name for x in parts] == ["shelf", "cleat", "clip"]
     assert parts[2].count == 2

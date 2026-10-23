@@ -49,11 +49,27 @@ def test_cleat_parts_mate(build):
     assert cleat.isValid() and len(cleat.Solids) == 1
     assert body.common(cleat).Volume < 0.01
     # midway along the bevel (y = 4) the hook sits just above the cleat
-    top = lay.plate_z[1]
-    bevel_z = top - lay.hook_height + (8 - 4)
+    bevel_z = lay.plate_z[1] - lay.hook_height + 4
     assert inside(body, 100, 4, bevel_z + 0.3)
     assert inside(cleat, 100, 4, bevel_z - 0.6)
     assert not inside(body, 100, 4, bevel_z - 0.1) and not inside(cleat, 100, 4, bevel_z - 0.1)
+
+
+def _top_z(shape, y):
+    zs = [z / 10 for z in range(-400, 0) if inside(shape, 100, y, z / 10)]
+    return max(zs) if zs else None
+
+
+def test_cleat_bevel_holds_shelf_to_wall(build):
+    """The wall cleat is tallest at its front and slopes down toward the wall; the hook's tip points down
+    at the wall, so gravity pulls the shelf in, not off."""
+    p, lay = _p(mount="cleat")
+    cleat = build_cleat(p, lay)
+    assert _top_z(cleat, 7.0) > _top_z(cleat, 1.0) + 5
+    body = build(mount="cleat")
+    def underside(y):
+        return min(z / 10 for z in range(-400, 0) if inside(body, 100, y, z / 10) and z / 10 > -25)
+    assert underside(1.0) < underside(7.0) - 5
 
 
 def test_cleat_wall_offset(build):

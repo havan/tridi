@@ -76,10 +76,18 @@ def effective(p: ShelfParams) -> tuple[ShelfParams, list[str]]:
         notes.append("adhesive mounting needs the full back plate; plate_style set to full")
     if p.mount == "cleat" and p.plate_style == "pads":
         raise ParamError("pads plate style is not supported with the cleat; use windowed or full")
-    if (p.supports == "below" and p.mount in ("screws", "keyhole") and p.top_screws == "under"
-            and p.depth + p.front_lip > p.max_reach):
-        raise ParamError(f"a screwdriver can't reach under a {p.depth + p.front_lip:g} mm deep shelf "
-                         f"(max_reach {p.max_reach:g}); use --top-screws strip, --mount keyhole or --mount cleat")
+    # keyhole and cleat screws go into the wall before the shelf, so only plain screws need reach
+    reach = p.depth + p.front_lip
+    if p.mount == "screws" and reach > p.max_reach:
+        if p.supports == "below" and p.top_screws == "under":
+            raise ParamError(f"a screwdriver can't reach under a {reach:g} mm deep shelf (max_reach "
+                             f"{p.max_reach:g}); use --top-screws strip, --mount keyhole or --mount cleat")
+        if p.supports == "above":
+            raise ParamError(f"a screwdriver can't reach across a {reach:g} mm deep shelf (max_reach "
+                             f"{p.max_reach:g}); use --mount keyhole or --mount cleat")
+    if p.orientation == "side" and (p.plate_style == "pads" or p.mount == "keyhole"):
+        what = "the pads" if p.plate_style == "pads" else "keyholes"
+        raise ParamError(f"--orientation side can't print {what} without supports; use --orientation flat")
     if p.screw_head_d < p.screw_d + 1:
         raise ParamError(f"screw_head_d ({p.screw_head_d:g}) must be at least screw_d + 1 ({p.screw_d + 1:g})")
     bd = bracket_depth(p)

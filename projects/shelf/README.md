@@ -79,8 +79,8 @@ front_lip = 6
   screwdriver. For deeper shelves, `--top-screws strip` moves them into a strip above the shelf.
 - **Keyholes** (`--mount keyhole`): set the screws so their heads stand about 4 mm proud of the wall, then
   hang the shelf over them and push it down.
-- **Cleat** (`--mount cleat`): screw the cleat (`cleat.stl`) to the wall first, level, then hook the shelf
-  over it. A back notch splits the cleat into two pieces, each with its own screws.
+- **Cleat** (`--mount cleat`): screw the cleat (`cleat.stl`) to the wall first, level, with its tall side
+  away from the wall, then hook the shelf over it. A back notch splits the cleat into two pieces, each with its own screws.
 - **Adhesive** (`--mount adhesive`): a taller, hole-free back plate for double-sided tape or hot glue
   (`--glue-grooves` gives glue something to grip). Tape and glue only hold as well as the paint under
   them, so keep this for light things.
@@ -91,10 +91,14 @@ front_lip = 6
   corner. `--notch back@100` cuts a slot at 100 mm from the left. Both go through the back plate too,
   so the cable runs straight up the wall.
 - Clips push onto an edge of the shelf and hold a cable just behind its plug, so the plug stays on the
-  shelf when you unplug the device. They fit the side edges always, and the front edge only without a
-  front lip. Their grip is shorter than the honeycomb's solid rim, so they never land on a hole.
+  shelf when you unplug the device. They fit anywhere along an edge that is free of brackets and the
+  lip: the front edge without a lip, otherwise the side edges between the brackets and the lip. The
+  build refuses `--clips` when no edge has room. Their grip is shorter than the honeycomb's solid rim,
+  so they never land on a hole.
 
 ## Printing
 
 PLA, no supports. Each part is exported in its print orientation: the shelf lies on its back plate (or
 on its end with `--orientation side`), the cleat lies on its back, and the clips stand on their backs.
+On its end, the brackets get 45° tapers underneath so they print without supports; pads and keyholes
+can't be printed that way and are refused.

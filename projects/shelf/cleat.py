@@ -24,11 +24,11 @@ def _profile(p: ShelfParams, lay: Layout) -> tuple[list[tuple[float, float]], fl
     top, t = lay.plate_z[1], p.cleat_thickness - GAP
     drop = GAP * math.sqrt(2)  # vertical offset for a perpendicular gap on a 45° bevel
 
-    def bevel(y):  # z of the hook's underside at y, lowered by the gap
-        return top - lay.hook_height + (p.cleat_thickness - y) - drop
+    def bevel(y):  # z of the hook's underside at y, lowered by the gap: tallest at the front
+        return top - lay.hook_height + y - drop
 
-    z_bottom = bevel(0) - p.cleat_height
-    return [(0, z_bottom), (t, z_bottom), (t, bevel(t)), (0, bevel(0))], z_bottom, bevel(t)
+    z_bottom = bevel(t) - p.cleat_height
+    return [(0, z_bottom), (t, z_bottom), (t, bevel(t)), (0, bevel(0))], z_bottom, bevel(0)
 
 
 def cleat_pieces(p: ShelfParams, lay: Layout) -> list[tuple[float, float]]:

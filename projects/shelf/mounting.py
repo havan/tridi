@@ -55,8 +55,9 @@ def _keyhole_cutter(p: ShelfParams, x: float, z: float) -> Part.Shape:
 
 def _hook_and_spacer(p: ShelfParams, lay: Layout) -> list[Part.Shape]:
     off, (bottom, top) = wall_offset(p), lay.plate_z
-    hook = yz_prism([(0, top), (off, top), (off, top - lay.hook_height),
-                     (0, top - lay.hook_height + off)], 0, p.width)
+    # the hook's underside slopes down toward the wall: its tip drops behind the wall cleat's bevel
+    hook = yz_prism([(0, top), (off, top), (off, top - lay.hook_height + off),
+                     (0, top - lay.hook_height)], 0, p.width)
     spacer = Part.makeBox(p.width, off, SPACER_HEIGHT, Vector(0, 0, bottom))
     return [hook, spacer]
 
