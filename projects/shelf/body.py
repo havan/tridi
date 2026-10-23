@@ -78,7 +78,7 @@ def _brackets(p: ShelfParams, lay: Layout) -> list[Part.Shape]:
     return out
 
 
-def _notch_cutters(p: ShelfParams, lay: Layout) -> list[Part.Shape]:
+def notch_cutters(p: ShelfParams, lay: Layout) -> list[Part.Shape]:
     z0 = lay.plate_z[0] - 10
     h = lay.plate_z[1] + p.front_lip + 10 - z0
     out = []
@@ -96,7 +96,7 @@ def _notch_cutters(p: ShelfParams, lay: Layout) -> list[Part.Shape]:
 def build_body(p: ShelfParams, lay: Layout) -> Part.Shape:
     plate = mounting.add(p, lay, _plate(p, lay))
     body = fuse_all([_slab(p, lay), plate, *_brackets(p, lay)])
-    cutters = mounting.cutters(p, lay) + _notch_cutters(p, lay)
+    cutters = mounting.cutters(p, lay) + notch_cutters(p, lay)
     if cutters:
         body = body.cut(cutters).removeSplitter()
     return assert_single_solid(body, "shelf")

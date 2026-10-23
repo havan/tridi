@@ -239,6 +239,11 @@ def plan(p: ShelfParams) -> Layout:
         cols = _hole_columns(p, brackets)
         pads = [(min(c - t / 2 - 4, x - hd / 2 - 6), max(c + t / 2 + 4, x + hd / 2 + 6))
                 for c, x in zip(brackets, cols)]
+    if p.mount == "cleat":
+        cleat_bottom = plate_z[1] - hook_height + p.cleat_thickness - p.cleat_height
+        if cleat_bottom < plate_z[0] + SPACER_HEIGHT + 2:
+            raise LayoutError("the back plate is too short for the cleat and its spacer; raise "
+                              "--bracket-height or lower --cleat-height")
     _check_collisions(p, notches, brackets, holes, pads)
     windows = _windows(p, plate_z, brackets, notches, hook_height) if p.plate_style == "windowed" else []
     hexes, axis = _hexes(p, brackets, notches) if p.surface == "honeycomb" else ([], "y" if p.orientation == "flat" else "x")
