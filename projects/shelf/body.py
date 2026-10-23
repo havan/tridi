@@ -33,8 +33,24 @@ def _slab(p: ShelfParams, lay: Layout) -> Part.Shape:
     slab = Part.makeBox(p.width, p.depth - wall_offset(p), z1 - z0, Vector(0, wall_offset(p), z0))
     r = min(p.edge_radius, 0.45 * (z1 - z0))
     if r > 0:
-        slab = slab.makeFillet(r, _edges(slab, y=p.depth))
+        edges = _edges(slab, y=p.depth)
+        if p.front_lip:  # the lip covers the top front edge
+            edges = [e for e in edges if not (abs(e.BoundBox.ZMin - z1) < 1e-6 and abs(e.BoundBox.ZMax - z1) < 1e-6)]
+        slab = slab.makeFillet(r, edges)
     return slab
+
+
+def _lip(p: ShelfParams, lay: Layout) -> Part.Shape:
+    """Low lip along the front edge. Its inner face slopes at 45° so it prints without supports."""
+    h, d = p.front_lip, p.depth
+    lip = mounting.yz_prism([(d - h - 2, 0), (d, 0), (d, h), (d - 2, h)], 0, p.width)
+    lip = lip.makeFillet(0.9, _edges(lip, z=h))
+    # trim the ends to the slab's rounded front corners
+    r = min(p.edge_radius, 0.45 * p.slab_thickness)
+    outline = Part.makeBox(p.width, d, h + 1, Vector(0, 0, -0.5))
+    if r > 0:
+        outline = outline.makeFillet(r, [e for e in _edges(outline, y=d) if e.BoundBox.ZLength > 1])
+    return lip.common(outline)
 
 
 def _plate_piece(p: ShelfParams, x0: float, x1: float, z0: float, z1: float, free_ends: list[float],
@@ -138,7 +154,10 @@ def notch_cutters(p: ShelfParams, lay: Layout) -> list[Part.Shape]:
 
 def build_body(p: ShelfParams, lay: Layout) -> Part.Shape:
     plate = mounting.add(p, lay, _plate(p, lay))
-    body = fuse_all([_slab(p, lay), plate, *_brackets(p, lay)])
+    solids = [_slab(p, lay), plate, *_brackets(p, lay)]
+    if p.front_lip:
+        solids.append(_lip(p, lay))
+    body = fuse_all(solids)
     cutters = mounting.cutters(p, lay) + notch_cutters(p, lay) + _window_cutters(p, lay) + _hex_cutters(p, lay)
     if cutters:
         body = body.cut(cutters).removeSplitter()
