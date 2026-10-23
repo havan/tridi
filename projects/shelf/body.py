@@ -5,10 +5,10 @@ import FreeCAD
 import Part
 from FreeCAD import Vector
 
-from tridi.features import assert_single_solid, fuse_all, rounded_slot
+from tridi.features import assert_single_solid, fuse_all, hex_prisms, rounded_slot
 
 from . import mounting
-from .layout import Layout
+from .layout import Layout, keyhole_extent
 from .params import ShelfParams, bracket_depth, wall_offset
 
 PRINT_ROTATION = {
@@ -37,19 +37,62 @@ def _slab(p: ShelfParams, lay: Layout) -> Part.Shape:
     return slab
 
 
-def _plate(p: ShelfParams, lay: Layout) -> Part.Shape:
+def _plate_piece(p: ShelfParams, x0: float, x1: float, z0: float, z1: float, free_ends: list[float],
+                 chamfer: bool) -> Part.Shape:
     off, t = wall_offset(p), p.plate_thickness
+    piece = Part.makeBox(x1 - x0, t, z1 - z0, Vector(x0, off, z0))
+    if chamfer and p.bed_chamfer > 0 and off == 0:
+        piece = piece.makeChamfer(p.bed_chamfer, _edges(piece, y=0))
+    r = min(p.edge_radius, 0.9 * t)
+    if r > 0 and free_ends:
+        piece = piece.makeFillet(r, [e for z in free_ends for e in _edges(piece, y=off + t, z=z)])
+    return piece
+
+
+def _plate(p: ShelfParams, lay: Layout) -> Part.Shape:
     z0, z1 = lay.plate_z
-    plate = Part.makeBox(p.width, t, z1 - z0, Vector(0, off, z0))
-    if p.bed_chamfer > 0 and off == 0:
-        plate = plate.makeChamfer(p.bed_chamfer, _edges(plate, y=0))
     free_ends = [z0] if p.supports == "below" else [z1]
     if p.supports == "below" and z1 > 0:
         free_ends.append(z1)  # the strip above the shelf
-    r = min(p.edge_radius, 0.9 * t)
-    if r > 0:
-        plate = plate.makeFillet(r, [e for z in free_ends for e in _edges(plate, y=off + t, z=z)])
-    return plate
+    if p.plate_style != "pads":
+        return _plate_piece(p, 0, p.width, z0, z1, free_ends, chamfer=True)
+    # pads: a mounting pad per bracket, joined by a rail along the slab
+    if p.supports == "below":
+        rail = (lay.slab_z[0] - 10, z1)
+    else:
+        rail = (z0, lay.slab_z[1] + 10)
+    pieces = [_plate_piece(p, 0, p.width, *rail, [], chamfer=False)]
+    pieces += [_plate_piece(p, a, b, z0, z1, free_ends, chamfer=False) for a, b in lay.pads]
+    return fuse_all(pieces)
+
+
+def _window_cutters(p: ShelfParams, lay: Layout) -> list[Part.Shape]:
+    if not lay.windows:
+        return []
+    off, t, hd = wall_offset(p), p.plate_thickness, p.screw_head_d
+    windows = []
+    for x0, z0, x1, z1 in lay.windows:
+        w = Part.makeBox(x1 - x0, t + 2, z1 - z0, Vector(x0, off - 1, z0))
+        windows.append(w.makeFillet(5, [e for e in w.Edges if e.BoundBox.YLength > t]))
+    keep = []
+    for x, z in lay.holes:  # leave material around every hole
+        if p.mount == "keyhole":
+            lo, hi = keyhole_extent(p, z)
+            w = hd + 8 + 6
+            keep.append(Part.makeBox(w, t + 4, hi - lo + 6, Vector(x - w / 2, off - 2, lo - 3)))
+        else:
+            keep.append(Part.makeCylinder(hd / 2 + 5, t + 4, Vector(x, off - 2, z), Vector(0, 1, 0)))
+    cutter = fuse_all(windows)
+    if keep:
+        cutter = cutter.cut(keep)
+    return [cutter]
+
+
+def _hex_cutters(p: ShelfParams, lay: Layout) -> list[Part.Shape]:
+    if not lay.hexes:
+        return []
+    z0, z1 = lay.slab_z
+    return [hex_prisms(list(lay.hexes), p.hex_cell, z0 - 1, z1 - z0 + 2, lay.hex_vertex_axis)]
 
 
 def _bracket_profile(depth: float, height: float, web: float) -> Part.Shape:
@@ -96,7 +139,7 @@ def notch_cutters(p: ShelfParams, lay: Layout) -> list[Part.Shape]:
 def build_body(p: ShelfParams, lay: Layout) -> Part.Shape:
     plate = mounting.add(p, lay, _plate(p, lay))
     body = fuse_all([_slab(p, lay), plate, *_brackets(p, lay)])
-    cutters = mounting.cutters(p, lay) + notch_cutters(p, lay)
+    cutters = mounting.cutters(p, lay) + notch_cutters(p, lay) + _window_cutters(p, lay) + _hex_cutters(p, lay)
     if cutters:
         body = body.cut(cutters).removeSplitter()
     return assert_single_solid(body, "shelf")
