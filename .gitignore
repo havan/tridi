@@ -1,0 +1,13 @@
+# pixi environment
+.pixi/
+# build outputs
+out/
+__pycache__/
+*.pyc
+.pytest_cache/
+# FreeCAD backups
+*.FCBak
+*.FCStd1
+# personal presets
+local.toml
+.claude/settings.local.json

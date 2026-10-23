@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "freecad": {
+      "command": "uvx",
+      "args": ["freecad-mcp@0.1.27", "--freecadcmd", ".pixi/envs/default/bin/freecadcmd"]
+    }
+  }
+}
