@@ -1,6 +1,6 @@
 # Parametric wall shelf: design
 
-Date: 2026-10-23. Status: draft for review.
+Date: 2026-10-23. Status: approved by the user 2026-10-23.
 
 ## Intent
 
