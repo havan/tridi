@@ -1,0 +1,13 @@
+# Example presets: pixi run build shelf --preset <name>
+# Put your own in local.toml at the repo root, as [shelf.<name>] tables.
+
+[corner]
+notches = ["back-left"]
+
+[lean]
+plate_style = "pads"
+surface = "honeycomb"
+
+[hanging]
+mount = "cleat"
+clips = 2
