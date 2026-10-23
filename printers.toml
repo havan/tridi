@@ -1,0 +1,42 @@
+# Printer profiles: build volume in mm (x, y, z), nozzle diameter, and the fit clearance used for parts
+# that slide or clip together. Choose one with `--printer <key>`, or give a size: `--printer 300x300x300`.
+
+[mk3s]
+name = "Prusa i3 MK3S/MK3S+"
+x = 250
+y = 210
+z = 210
+nozzle = 0.4
+clearance = 0.2
+
+[mk4]
+name = "Prusa MK4/MK4S"
+x = 250
+y = 210
+z = 220
+nozzle = 0.4
+clearance = 0.2
+
+[a1]
+name = "Bambu Lab A1"
+x = 256
+y = 256
+z = 256
+nozzle = 0.4
+clearance = 0.2
+
+[p1s]
+name = "Bambu Lab P1S/X1C"
+x = 256
+y = 256
+z = 256
+nozzle = 0.4
+clearance = 0.2
+
+[ender3]
+name = "Creality Ender-3"
+x = 220
+y = 220
+z = 250
+nozzle = 0.4
+clearance = 0.2
