@@ -63,3 +63,9 @@ def test_wall_angle_option_reaches_the_build(tmp_path):
     r, out = run(tmp_path, "--wall-angle", "3.9")
     assert r.returncode == 0, r.stderr
     assert "wall_angle = 3.9" in (out / "summary.txt").read_text()
+
+
+def test_through_cut_can_be_turned_off(tmp_path):
+    r, out = run(tmp_path, "--no-through-cut")
+    assert r.returncode == 0, r.stderr
+    assert "through_cut = False" in (out / "summary.txt").read_text()

@@ -175,10 +175,11 @@ def test_at_zero_slope_the_arms_sit_on_the_bed(straight_strip):
     assert not inside(straight_strip, MID_WALL, 2, -0.1)
 
 
-def test_at_zero_slope_the_seat_still_ends_at_the_stop(straight_strip):
-    assert inside(straight_strip, 0, -8, 5)
-    assert not inside(straight_strip, 0, -8, STRIP_T + 0.5)
-    assert overlap(straight_strip, bar()) == pytest.approx(0, abs=1e-6)
+def test_at_zero_slope_the_seat_still_ends_at_the_stop_if_asked():
+    s = strip(arm_slope=0, through_cut=False)
+    assert inside(s, 0, -8, 5)
+    assert not inside(s, 0, -8, STRIP_T + 0.5)
+    assert overlap(s, bar()) == pytest.approx(0, abs=1e-6)
 
 
 def test_at_zero_slope_a_nut_still_drops_past_the_arm_into_the_end_slot(straight_strip):
@@ -192,13 +193,68 @@ def test_strip_drop_moves_the_top_edge_and_the_arm_slope():
     assert not inside(s, MID_WALL, 2, STRIP_T + 6) and inside(s, MID_WALL, 2, STRIP_T + 8)
 
 
-def test_the_seat_ends_in_a_stop_so_the_bar_never_reaches_the_wall(default_strip):
-    assert inside(default_strip, 0, -8, 5)
-    assert not inside(default_strip, 0, -8, STRIP_T + 0.5)
-
-
 def test_above_the_strip_the_cradle_is_open_to_the_wall(default_strip):
     assert not inside(default_strip, 0, 2, 3)
+
+
+# ---- through cut: the seat runs on through the strip to the wall
+
+
+@pytest.fixture(scope="module")
+def stop_strip():
+    return strip(through_cut=False)
+
+
+def test_the_seat_cuts_through_the_strip_by_default(default_strip):
+    assert not inside(default_strip, 0, -8, 5)
+    assert not inside(default_strip, 0, -8, 0.5)
+    assert not inside(default_strip, 0, -8, STRIP_T - 0.1)
+
+
+@pytest.mark.parametrize("x", [-70, 0, 70])
+def test_a_bar_can_reach_the_wall_touching_nothing(default_strip, x):
+    assert overlap(default_strip, bar(x, z0=0.01)) == pytest.approx(0, abs=1e-6)
+
+
+def test_the_cut_is_the_seats_own_size(default_strip):
+    assert not inside(default_strip, 0, -10.2, 5)
+    assert inside(default_strip, 0, -10.4, 5)
+
+
+def test_the_strip_carries_on_under_the_cut(default_strip):
+    # the strip's bottom edge is at y = -19, so 8.7 mm of it stays under the 10.3 mm seat
+    assert inside(default_strip, 0, -18.5, 5)
+    assert inside(default_strip, 0, -18.5, STRIP_T - 0.1)
+
+
+def test_the_cut_saves_the_stop_under_the_strips_top_edge(default_strip, stop_strip):
+    # one stop is the circle's segment below the top edge, 3 mm from the centre of a 10.3 mm seat:
+    # 10.3² × acos(3 / 10.3) - 3 × √(10.3² - 3²) = 105.74 mm², and 8 mm thick: 846 mm³. Three cradles: 2538 mm³
+    assert stop_strip.Volume - default_strip.Volume == pytest.approx(2538, rel=0.02)
+
+
+def test_the_cut_is_chamfered_at_the_bed_so_the_first_layer_cant_grip_the_bar(default_strip):
+    assert not inside(default_strip, 0, -10.4, 0.05)
+    assert inside(default_strip, 0, -10.4, 0.5)
+
+
+def test_the_stop_can_be_kept(stop_strip):
+    assert inside(stop_strip, 0, -8, 5)
+    assert not inside(stop_strip, 0, -8, STRIP_T + 0.5)
+    assert overlap(stop_strip, bar()) == pytest.approx(0, abs=1e-6)
+    assert overlap(stop_strip, bar(z0=0.01)) > 1
+
+
+def test_the_bars_rest_where_they_did_past_the_strip(default_strip, stop_strip):
+    for z in (STRIP_T + 7, 24):
+        assert inside(default_strip, 0, -MID_WALL, z) == inside(stop_strip, 0, -MID_WALL, z)
+    assert overlap(default_strip, lift_path()) == pytest.approx(overlap(stop_strip, lift_path()), rel=0.01)
+
+
+def test_straight_arms_keep_their_reach_with_the_cut(straight_strip):
+    assert not inside(straight_strip, 0, -8, 5)
+    assert inside(straight_strip, MID_WALL, 2, 1)
+    assert overlap(straight_strip, bar(z0=0.01)) == pytest.approx(0, abs=1e-6)
 
 
 # ---- leaning wall: the strip lies flat on the wall, the cradle's axis stays level
@@ -228,6 +284,24 @@ def test_a_level_bar_fits_the_seat_on_a_leaning_wall(leaning_strip):
 @pytest.mark.parametrize("x", [-70, 70])
 def test_every_cradle_on_the_strip_is_tilted(leaning_strip, x):
     assert overlap(leaning_strip, level_bar(LEAN, x)) == pytest.approx(0, abs=1e-6)
+
+
+def test_the_cut_tilts_with_the_cradle_so_a_level_bar_reaches_the_wall(leaning_strip):
+    # 7 mm behind the strip's front, the bar's lowest edge is 1 - 10 × sin 3.9° = 0.32 mm off the wall
+    assert overlap(leaning_strip, level_bar(LEAN, start=-7)) == pytest.approx(0, abs=1e-6)
+    assert overlap(leaning_strip, level_bar(-LEAN, start=-7)) > 1
+
+
+def test_the_cuts_floor_rises_toward_the_wall_along_the_tilt(leaning_strip):
+    # 7 mm behind the strip's front the centre has risen 7 × tan 3.9° = 0.48, and the tilted seat's floor is
+    # 10.3 / cos 3.9° = 10.32 below it: y = -9.85
+    assert not inside(leaning_strip, 0, -9.7, 1)
+    assert inside(leaning_strip, 0, -10, 1)
+
+
+def test_the_tilted_cut_leaves_no_wedge_at_the_strips_front(leaning_strip):
+    # a cutter ending at the front would stop short of it under the bar, by 10.3 × sin 3.9° = 0.7 mm
+    assert not inside(leaning_strip, 0, -10.2, 7.5)
 
 
 def test_a_level_bar_collides_with_a_cradle_made_for_a_straight_wall(default_strip):
@@ -521,7 +595,8 @@ def steep_overhang_heights(shape):
                                 {"wrap": 180, "drain": False}, {"nut_entry": "front"},
                                 {"arm_slope": 0}, {"arm_slope": 60}, {"arm_slope": 0, "bracket": True},
                                 {"wall_angle": 3.9}, {"wall_angle": 3.9, "bracket": True},
-                                {"wall_angle": 8, "arm_slope": 0}])
+                                {"wall_angle": 8, "arm_slope": 0}, {"through_cut": False},
+                                {"through_cut": False, "arm_slope": 0}])
 def test_strip_needs_no_supports_beyond_short_bridges(kw):
     # the only flat undersides allowed: the nut slots' ceilings, the bolt holes' ends and the drain's roof
     p = part("strip", **kw)
@@ -590,6 +665,9 @@ def test_bed_edges_are_chamfered_against_elephants_foot(default_strip):
     {"wall_angle": 15, "cradle_depth": 40, "bracket": True, "bracket_height": 30},
     {"wall_angle": 3.9, "bar_d": 40, "pitch": 100, "strip_height": 14, "cradle_depth": 30},
     {"wall_angle": 3.9, "drain": False}, {"wall_angle": 3.9, "bar_d": 12, "wrap": 240, "bracket": True},
+    {"through_cut": False}, {"through_cut": False, "bracket": True}, {"through_cut": False, "arm_slope": 0},
+    {"through_cut": False, "wall_angle": 3.9}, {"through_cut": False, "nut_entry": "front"},
+    {"strip_drop": 0, "strip_height": 24}, {"bar_d": 34, "pitch": 100, "cradle_depth": 30},
     {"arm_slope": 0}, {"arm_slope": 0, "bracket": True}, {"arm_slope": 0, "nut_entry": "front"},
     {"arm_slope": 0, "count": 1}, {"arm_slope": 0, "wrap": 180}, {"arm_slope": 0, "bar_d": 12},
     {"arm_slope": 0, "bar_d": 40, "pitch": 100, "cradle_depth": 30, "strip_height": 14},
@@ -603,3 +681,5 @@ def test_common_variants_build_one_valid_solid(kw):
     p = effective(BarholderParams(**kw))[0]
     for shape in (build_strip(p, CLEAR), build_plate(p, CLEAR)):
         assert shape.isValid() and len(shape.Solids) == 1 and shape.Volume > 0
+        mesh = MeshPart.meshFromShape(Shape=shape, LinearDeflection=0.05, AngularDeflection=0.2618)
+        assert mesh.isSolid() and not mesh.hasNonManifolds()  # a valid shape can still mesh with a seam left open

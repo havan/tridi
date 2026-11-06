@@ -1,7 +1,7 @@
 """Every barholder parameter, with its default and range, and the rules that tie parameters together.
 
 Geometry helpers here use the same coordinates as `parts`: x along the wall, y up, z out of the wall into the box,
-with the bar's centre at x = cradle position, y = 0 where the bar's end meets the stop.
+with the bar's centre at x = cradle position, y = 0 at the strip's front.
 """
 from __future__ import annotations
 
@@ -43,6 +43,8 @@ class BarholderParams:
     arm_slope: float = param(45, "slope of the cut behind the cradle's arms, degrees from the wall: steeper needs "
                              "fewer supports but shortens the snap's lip, 0 is no cut, with the arms straight down to "
                              "the wall and the print bed, and a much stiffer snap", min=0, max=80)
+    through_cut: bool = param(True, "the seat cuts on through the strip to the wall, which saves plastic and lets a bar "
+                              "reach the wall; off leaves a stop that keeps it off the wall")
     # strip
     strip_height: float = param(16, "height of the strip, mm", min=8, max=60)
     strip_thickness: float = param(8, "thickness of the strip against the wall, mm", min=3, max=20)
@@ -156,7 +158,7 @@ def rib_top_y(p: BarholderParams) -> float:
 
 
 def tilt_drop(p: BarholderParams, z: float) -> float:
-    """How far the seat has dropped along the strip at z, past the stop, to stay level on a leaning wall."""
+    """How far the seat has dropped at z, past the strip's front, to stay level on a leaning wall."""
     return (z - p.strip_thickness) * math.tan(math.radians(p.wall_angle))
 
 
@@ -263,6 +265,16 @@ def _check_bracket(p: BarholderParams) -> None:
                          f"drops on a leaning wall; use at least {needed:g}")
 
 
+def _bar_length_note(p: BarholderParams) -> str:
+    spare = p.cradle_depth - MIN_SEAT
+    shortest = f"at least that distance minus {2 * spare:g} mm if centred (keeps {MIN_SEAT:g} mm in each cradle)"
+    if not p.through_cut:
+        return f"bar length: at most the distance between the walls minus {2 * p.strip_thickness:g} mm, {shortest}"
+    return (f"bar length: at most the distance between the walls, {shortest}. With no stop a bar can slide until it "
+            f"touches a wall: to keep {MIN_SEAT:g} mm in the far cradle even then, make it no more than {spare:g} mm "
+            f"shorter than that distance")
+
+
 def _snap_note(p: BarholderParams) -> str:
     mouth = mouth_width(p)
     if mouth >= p.bar_d:
@@ -301,8 +313,7 @@ def effective(p: BarholderParams) -> tuple[BarholderParams, list[str]]:
         f"wall: drill {hole_d(p):g} mm holes at {spacing} mm from the strip's middle; {drill}, and drill both walls "
         f"at the same height so the bars sit level",
         nuts,
-        f"bar length: at most the distance between the walls minus {2 * p.strip_thickness:g} mm, at least that "
-        f"distance minus {2 * (p.cradle_depth - MIN_SEAT):g} mm (keeps {MIN_SEAT:g} mm in each cradle)",
+        _bar_length_note(p),
         _snap_note(p),
     ]
     if p.wall_angle == 0:

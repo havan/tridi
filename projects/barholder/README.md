@@ -19,6 +19,7 @@ pixi run build barholder --arm-slope 0 --wrap 215          # no cut: arms straig
 pixi run build barholder --no-backplate                    # washers instead of a plate
 pixi run build barholder --nut-entry front                 # nut pockets open on the meat side instead of a slot
 pixi run build barholder --no-drain                        # closed cradle floor
+pixi run build barholder --no-through-cut                  # a stop in the seat that keeps the bar's end off the wall
 pixi run build barholder --help                            # every option
 ```
 
@@ -51,6 +52,10 @@ drill both walls at the same height.
   each end of a default 25 mm cradle, and if the slope leaves too little lip the build asks for a deeper cradle. At 0
   there's no cut and nothing to support, but the arms are rooted to the strip right up to the wall, so the snap is much
   stiffer: lower `--wrap` and try `--preset test_fit`, or use `--wrap 180` for no snap at all.
+- **`--through-cut`:** on by default, the seat runs on through the strip to the wall. That saves about 0.85 cm³ a cradle
+  by default, and a bar can use the full distance between the walls. With nothing to stop it, a bar can also slide
+  until it touches a wall, and a short one could then come close to leaving the cradle at the far end. The summary gives
+  the length that stays safe. `--no-through-cut` keeps the end of the bar off the wall with a stop.
 - **`--count`:** a strip longer than your printer's bed is refused. Mount several strips side by side on a long wall.
 
 ## What to buy
@@ -89,14 +94,17 @@ solid parts, so the real ones are lower. Meat touches the bars, not the holders.
 
 ## Details
 
-- **The seat stops at the strip's front**, so a bar's end never reaches the wall.
+- **The seat runs through the strip**, which carries on under it, with a bolt on either side of each cradle. If the bar
+  is wide enough to cut right through the strip's height, the cradle's own wall joins the two sides.
 - **The nuts pull on a plastic ledge**, so tightening clamps the strip to the wall.
 - **Nothing metal faces the meat by default.** The slots open only at the strip's top edge, and the bolt holes stop
   short of the front. A nut can't drop out, since the slot is closed below it. A bolt long enough to break through is
   refused, with the strip thickness it would need. `--nut-entry front` trades that for easier assembly: the nuts sit in
   recesses open to the meat side.
-- **The drain** is a short gap in the floor against the stop, where drips collect, since a wall leaning outward tips
-  the bar's wall end down. The ring stays closed in front of it.
+- **The drain** is a short gap in the floor just past the strip's front. The ring stays closed in front of it. With the
+  through cut there's a strip's thickness of floor behind it, ending at the wall. That floor is level if `--wall-angle`
+  matches the wall. If it doesn't, the floor runs down toward the wall and a shallow puddle can sit there: about 0.5 mm
+  deep on a 3.9° wall with the default strip.
 - **The bracket** is two ribs per cradle, either side of the drain, down to a foot on the wall. The foot pushes against
   the wall, so it needs no bolt of its own, and the backplate grows to back it up. You won't need it for 1–2 kg on a
   25 mm cradle. It's there for deep cradles.

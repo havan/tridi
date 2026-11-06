@@ -1,5 +1,5 @@
 """The printed parts, in use coordinates: z = 0 is the box wall's inside face, +z points out of the wall into the box,
-x runs along the wall and y points up the wall, with y = 0 at the bars' centres where their ends meet the stop. On a
+x runs along the wall and y points up the wall, with y = 0 at the bars' centres at the strip's front. On a
 leaning wall these axes lean with it, and the bars run level, slightly down in y as z grows. Builders take resolved
 parameters (see `params.effective`).
 """
@@ -31,7 +31,7 @@ def _cradle_prism(p: BarholderParams) -> Part.Shape:
     x = 0, and as simple as an extrusion so that its layers follow the arms when printed on its back.
 
     On a leaning wall the wall's normal points up into the box, so the extrusion tilts down by the same angle to keep
-    the bar level. It pivots where the bar's end meets the stop, and is trimmed flat for the bed and at the front."""
+    the bar level. It pivots at the strip's front, and is trimmed flat for the bed and at the front."""
     a = math.radians(lip_angle(p))
     r, o = bore_r(p), outer_r(p)
     top_x, top_y = flare_top(p)
@@ -62,6 +62,24 @@ def _cradle_prism(p: BarholderParams) -> Part.Shape:
     prism.rotate(Vector(0, 0, p.strip_thickness), Vector(1, 0, 0), p.wall_angle)
     reach = 2 * (top_x + p.cradle_wall + o + p.cradle_depth)
     return prism.common(Part.makeBox(2 * reach, 2 * reach, p.cradle_depth - z0, Vector(-reach, -reach, z0)))
+
+
+def _seat_cutters(p: BarholderParams) -> list[Part.Shape]:
+    """The seat, carried on through the strip to the wall. Past the strip's front a cutter is only ever in the seat's
+    open space, so it runs right through: a tilted end there would leave a wedge of strip under the bar.
+
+    Each has a cone at the bed to chamfer the seat's edge, upright as the bed is flat. It runs on past the edge at both
+    ends, so that it meets the tilted seat at a clean angle all the way round."""
+    r, c = bore_r(p), p.bed_chamfer
+    centre_y = -tilt_drop(p, 0)
+    out = []
+    for x in cradle_xs(p):
+        seat = Part.makeCylinder(r, 3 * p.cradle_depth, Vector(x, 0, -p.cradle_depth))
+        seat.rotate(Vector(x, 0, p.strip_thickness), Vector(1, 0, 0), p.wall_angle)
+        out.append(seat)
+        if c > 0:
+            out.append(Part.makeCone(r + c + 1, r - 1, c + 2, Vector(x, centre_y, -1)))
+    return out
 
 
 def _arm_relief(p: BarholderParams) -> Part.Shape:
@@ -105,8 +123,8 @@ def _rib(p: BarholderParams, x0: float, x1: float) -> Part.Shape:
 
 
 def _drain(p: BarholderParams, x: float) -> Part.Shape:
-    """A short gap through the floor against the stop, where drips running along the bar collect. The ring stays closed
-    in front of it."""
+    """A short gap through the floor just past the strip's front, where drips running along the bar fall through. The
+    ring stays closed in front of it."""
     half, floor = p.drain_width / 2, -outer_r(p) - 1 - tilt_drop(p, p.strip_thickness + p.drain_length)
     return Part.makeBox(p.drain_width, -bore_r(p) + 0.5 - floor, p.drain_length,
                         Vector(x - half, floor, p.strip_thickness))
@@ -143,16 +161,17 @@ def _chamfer_bed(shape: Part.Shape, z: float, size: float) -> Part.Shape:
 
 
 def build_strip(p: BarholderParams, clearance: float) -> Part.Shape:
-    """Against the inside of the wall. The seat stops at the strip's front, so a bar can't reach the wall.
+    """Against the inside of the wall.
 
     The bed chamfer goes on before the cradles join: with no arm slope the arms meet the strip's edge at angles too
-    sharp to chamfer, and they don't need it, as the bar never sits that close to the wall."""
+    sharp to chamfer. The seat is only cut once they have, because a chamfer's edge on a tilted seat would land almost
+    on the cradle's flat base, and leave a seam that a valid shape can still mesh open."""
     body = _footprint(p, 0, p.strip_thickness).cut(_bolt_cutters(p, clearance)).removeSplitter()
     shapes = [_chamfer_bed(body, 0, p.bed_chamfer)]
     prism = _cradle_prism(p)
     if p.arm_slope > 0:
         prism = prism.cut(_arm_relief(p))
-    drains = []
+    cutters = _seat_cutters(p) if p.through_cut else []
     rib_a, rib_b = rib_span(p)
     for x in cradle_xs(p):
         cradle = prism.copy()
@@ -161,10 +180,10 @@ def build_strip(p: BarholderParams, clearance: float) -> Part.Shape:
         if p.bracket:
             shapes += [_rib(p, x + rib_a, x + rib_b), _rib(p, x - rib_b, x - rib_a)]
         if p.drain:
-            drains.append(_drain(p, x))
+            cutters.append(_drain(p, x))
     shape = fuse_all(shapes)
-    if drains:
-        shape = shape.cut(drains).removeSplitter()
+    if cutters:
+        shape = shape.cut(cutters).removeSplitter()
     return assert_single_solid(shape, "strip")
 
 

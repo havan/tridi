@@ -68,7 +68,7 @@ def test_notes_give_the_drilling_size_and_template():
 
 def test_notes_give_the_bar_length_range_from_the_cradle_depth():
     text = notes(cradle_depth=25)
-    assert "16 mm" in text and "30 mm" in text  # 2 × 8 mm strip; 2 × (25 - 10) mm
+    assert "minus 30 mm" in text  # 2 × (25 - 10) mm
 
 
 def test_notes_say_how_much_the_snap_squeezes_the_bar():
@@ -227,3 +227,17 @@ def test_a_bracket_whose_foot_is_above_its_tilted_tip_is_refused():
 
 def test_the_same_short_bracket_is_fine_on_a_straight_wall():
     effective(BarholderParams(cradle_depth=80, bracket=True, bracket_height=5))
+
+
+def test_notes_give_the_bar_length_up_to_the_walls_with_a_through_cut():
+    text = notes()
+    assert "at most the distance between the walls," in text
+    assert "minus 30 mm" in text  # centred: 2 × (25 - 10)
+    assert "no more than 15 mm shorter" in text  # against one wall, 10 mm still in the other cradle
+
+
+def test_notes_give_the_bar_length_to_the_stops_without_a_through_cut():
+    text = notes(through_cut=False)
+    assert "minus 16 mm" in text  # 2 × the 8 mm strip
+    assert "minus 30 mm" in text
+    assert "shorter" not in text
