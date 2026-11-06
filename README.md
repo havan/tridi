@@ -8,6 +8,7 @@ Every design is Python code: pick the options and sizes you need and get print-r
 | Project | What it is |
 |---|---|
 | [`shelf`](projects/shelf/) | Small wall shelf for phones, controllers and chargers, with cable management |
+| [`fanbox`](projects/fanbox/) | Fan socket, duct and fly-mesh frame for a drying box lid, such as a biltong box |
 
 ## Quick start
 

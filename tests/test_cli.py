@@ -67,3 +67,32 @@ def test_cli_help_lists_options():
     r = subprocess.run([sys.executable, "run.py", "build", "shelf", "--help"], cwd=REPO_ROOT, capture_output=True,
                        text=True)
     assert r.returncode == 0 and "--plate-style" in r.stdout and "--notch" in r.stdout
+
+
+def test_cli_fanbox(tmp_path):
+    out = tmp_path / "fanbox"
+    r = subprocess.run([sys.executable, "run.py", "build", "fanbox", "--out", str(out)], cwd=REPO_ROOT,
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    for name in ("duct.stl", "lid_plate.3mf", "mesh_frame.stl", "assembly.step"):
+        assert (out / name).exists(), name
+    summary = (out / "summary.txt").read_text()
+    assert "M4×16" in summary and "M4×40" in summary
+
+
+def test_cli_fanbox_base_length_follows_fan_size(tmp_path):
+    out = tmp_path / "fanbox"
+    r = subprocess.run([sys.executable, "run.py", "build", "fanbox", "--out", str(out), "--fan-size", "120"],
+                       cwd=REPO_ROOT, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    summary = (out / "summary.txt").read_text()
+    assert "lid_plate ×1" in summary and "print size 156.0 × 90.0" in summary
+    assert "base_length = auto" in summary
+
+
+def test_cli_fanbox_explicit_base_length(tmp_path):
+    out = tmp_path / "fanbox"
+    r = subprocess.run([sys.executable, "run.py", "build", "fanbox", "--out", str(out), "--base-length", "150"],
+                       cwd=REPO_ROOT, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert "print size 186.0 × 90.0" in (out / "summary.txt").read_text()

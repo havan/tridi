@@ -1,0 +1,8 @@
+# Example presets: pixi run build fanbox --preset <name>
+# Put your own in local.toml at the repo root, as [fanbox.<name>] tables.
+
+[fan_120]
+fan_size = 120
+
+[thick_fan]
+fan_thickness = 38
