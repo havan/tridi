@@ -95,6 +95,44 @@ def hex_prisms(centres: list[tuple[float, float]], across_flats: float, z0: floa
     return Part.makeCompound(out)
 
 
+def _thread_radius(u: float, root_r: float, crest_r: float, pitch: float) -> float:
+    """Radius at a fraction `u` of a turn along a trapezoid thread with 45° flanks."""
+    depth = crest_r - root_r
+    flank = depth / pitch
+    flat = (1 - 2 * flank) / 2
+    u = u % 1
+    if u < flat:
+        return root_r
+    if u < flat + flank:
+        return root_r + (u - flat) * pitch
+    if u < 2 * flat + flank:
+        return crest_r
+    return crest_r - (u - 2 * flat - flank) * pitch
+
+
+def threaded_rod(root_d: float, crest_d: float, pitch: float, z0: float, z1: float, phase_z: float = 0) -> Part.Shape:
+    """A right-handed single-start trapezoid thread. Across the axis its section is one closed curve that turns with
+    height, so lofting that curve gives a single smooth surface: quick to cut and fuse, unlike a swept helix. A nut's
+    bore is the same call with bigger diameters."""
+    root_r, crest_r = root_d / 2, crest_d / 2
+    points = 48
+    average = [i * 0.01 for i in range(-3, 4)]  # rounds the trapezoid's corners a little
+
+    def section(z: float) -> Part.Wire:
+        pts = []
+        for i in range(points):
+            a = 2 * math.pi * i / points
+            u = i / points - (z - phase_z) / pitch
+            r = sum(_thread_radius(u + d, root_r, crest_r, pitch) for d in average) / len(average)
+            pts.append(Vector(r * math.cos(a), r * math.sin(a), z))
+        curve = Part.BSplineCurve()
+        curve.interpolate(pts, PeriodicFlag=True)
+        return Part.Wire(curve.toShape())
+
+    steps = max(2, math.ceil((z1 - z0) / pitch * 8))
+    return Part.makeLoft([section(z0 + (z1 - z0) * i / steps) for i in range(steps + 1)], True, False)
+
+
 def fuse_all(shapes: list[Part.Shape]) -> Part.Shape:
     if len(shapes) == 1:
         return shapes[0]

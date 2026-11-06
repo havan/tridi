@@ -7,7 +7,7 @@ import Part
 from FreeCAD import Vector as V
 
 from tridi.features import (GeometryError, assert_single_solid, countersunk_hole, fuse_all, hex_prisms,
-                            rounded_rect, rounded_slot, teardrop_hole)
+                            rounded_rect, rounded_slot, teardrop_hole, threaded_rod)
 
 
 def _section_diameter(shape: Part.Shape, z: float) -> float:
@@ -73,3 +73,27 @@ def test_assert_single_solid():
         assert_single_solid(two, "thing")
     one = assert_single_solid(Part.makeBox(1, 1, 1), "thing")
     assert one.Volume == pytest.approx(1)
+
+
+def test_threaded_rod_is_a_solid_between_its_root_and_crest():
+    rod = threaded_rod(10, 12, 2.5, 0, 10)
+    assert rod.isValid() and len(rod.Solids) == 1
+    assert rod.BoundBox.ZLength == pytest.approx(10, abs=1e-3)
+    section = rod.slice(V(0, 0, 1), 5.3)[0]
+    radii = [math.hypot(q.x, q.y) for q in section.discretize(200)]
+    assert max(radii) == pytest.approx(6, abs=0.1)
+    assert min(radii) == pytest.approx(5, abs=0.1)
+    assert math.pi * 25 * 10 < rod.Volume < math.pi * 36 * 10
+
+
+def test_threaded_rod_winds_right_handed():
+    rod = threaded_rod(10, 12, 2.5, 0, 10)
+    r = 5.8  # near the crest, so only inside on the thread's ridge
+
+    def ridge(angle, z):
+        return rod.isInside(V(r * math.cos(angle), r * math.sin(angle), z), 1e-6, False)
+
+    z = next(z / 20 for z in range(60, 100) if ridge(0, z / 20) and ridge(0, z / 20 - 0.1) and ridge(0, z / 20 + 0.1))
+    assert not ridge(0, z + 1.25)
+    assert ridge(math.pi / 2, z + 0.625)  # going round anticlockwise climbs
+    assert not ridge(-math.pi / 2, z + 0.625)
