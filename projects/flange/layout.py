@@ -83,11 +83,13 @@ def bar_segments(p: FlangeParams) -> list[Segment]:
     if p.shape == "slot":
         return [((x, -r), (x, r)) for x, _ in hub_xy(p)]
     first = 0 if p.bars == 2 else 90
+    # a bar starts where the hub's curve meets its edges, not on the centre line, so its flat end is buried in the hub
+    start = math.sqrt(max((p.hub_d / 2) ** 2 - (p.bar_width / 2) ** 2, 0.0))
     out = []
     for k in range(p.bars):
         a = math.radians(first + k * 360 / p.bars)
         c, sn = math.cos(a), math.sin(a)
-        out.append(((p.hub_d / 2 * c, p.hub_d / 2 * sn), (r * c, r * sn)))
+        out.append(((start * c, start * sn), (r * c, r * sn)))
     return out
 
 

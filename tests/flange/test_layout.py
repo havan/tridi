@@ -66,7 +66,8 @@ def test_round_bars():
     four = bar_segments(resolved(fixing="centre_bolt"))
     ends = sorted((round(b[0], 6), round(b[1], 6)) for _, b in four)
     assert ends == sorted([(0.0, 25.0), (0.0, -25.0), (25.0, 0.0), (-25.0, 0.0)])
-    assert four[0][0] == pytest.approx((0, 7))
+    # where the hub's curve meets the bar's edges: 8 mm wide on a 14 mm hub
+    assert four[0][0] == pytest.approx((0, math.sqrt(7 ** 2 - 4 ** 2)))
     three = bar_segments(resolved(fixing="centre_bolt", bars=3))
     assert len(three) == 3 and three[0][1] == pytest.approx((0, 25))
     two = bar_segments(resolved(fixing="centre_bolt", bars=2))

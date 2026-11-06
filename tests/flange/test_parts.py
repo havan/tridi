@@ -1,11 +1,13 @@
+import math
+
 import pytest
 
 import tridi  # noqa: F401
 from FreeCAD import Vector as V
 
 from projects.flange import build
-from projects.flange.layout import rim_bolt_xy
-from projects.flange.params import FlangeParams, effective
+from projects.flange.layout import bar_segments, rim_bolt_xy
+from projects.flange.params import FlangeParams, effective, outer_height, outer_z0
 from projects.flange.parts import build_inner, build_outer
 from tridi.export import to_bed
 from tridi.printers import get_printer, load_printers
@@ -160,6 +162,25 @@ def test_centre_bolt_has_a_collar():
 def test_two_and_three_bars_build(bars):
     p = resolved(bars=bars, **CENTRE)
     assert build_outer(p, CLEAR).isValid() and build_inner(p, CLEAR).isValid()
+
+
+@pytest.mark.parametrize("bars", [2, 3, 4])
+@pytest.mark.parametrize("mesh", ["wire", "grid"])
+def test_round_bars_stay_full_width_from_hub_to_rim(bars, mesh):
+    """A flat bar end set at the hub's edge leaves a wedge-shaped gap at each corner, against the hub's curve."""
+    p = resolved(bars=bars, mesh=mesh, **CENTRE)
+    pieces = ((build_outer(p, CLEAR), outer_z0(p) + outer_height(p) - 1),
+              (build_inner(p, CLEAR), -p.wall_thickness - p.inner_thickness / 2))
+    r, half = p.opening_d / 2, p.bar_width / 2 - 0.1
+    joined = math.sqrt((p.hub_d / 2) ** 2 - half ** 2)  # where the hub's curve meets a line just inside the bar's edge
+    for shape, z in pieces:
+        for _, (x1, y1) in bar_segments(p):
+            ax, ay = x1 / r, y1 / r
+            for side in (-1, 1):
+                for k in range(21):
+                    d = joined + (r - joined) * k / 20
+                    x, y = ax * d - ay * side * half, ay * d + ax * side * half
+                    assert solid_at(shape, x, y, z), (bars, mesh, round(d, 2), side)
 
 
 @pytest.mark.parametrize("opening_d", [155, 165, 170, 195, 225])
