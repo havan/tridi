@@ -51,3 +51,15 @@ def test_nut_entry_option_reaches_the_build(tmp_path):
 def test_unknown_nut_entry_is_refused(tmp_path):
     r, _ = run(tmp_path, "--nut-entry", "side")
     assert r.returncode == 2 and "top" in r.stderr
+
+
+def test_arm_slope_option_reaches_the_build(tmp_path):
+    r, out = run(tmp_path, "--arm-slope", "0")
+    assert r.returncode == 0, r.stderr
+    assert "arm_slope = 0" in (out / "summary.txt").read_text()
+
+
+def test_wall_angle_option_reaches_the_build(tmp_path):
+    r, out = run(tmp_path, "--wall-angle", "3.9")
+    assert r.returncode == 0, r.stderr
+    assert "wall_angle = 3.9" in (out / "summary.txt").read_text()

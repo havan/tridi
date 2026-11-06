@@ -142,6 +142,50 @@ def test_arms_stand_free_of_the_strip_near_the_wall(default_strip):
     assert inside(default_strip, MID_WALL, y, 24)
 
 
+def test_a_steeper_arm_slope_clears_the_arms_further_from_the_wall():
+    s = strip(arm_slope=60)  # at y=2, 5 mm above the strip: the slope reaches z = 8 + 5 × tan 60° = 16.66
+    assert not inside(s, MID_WALL, 2, 16) and inside(s, MID_WALL, 2, 17.5)
+
+
+def test_arm_slope_is_measured_from_the_wall(default_strip):
+    assert inside(default_strip, MID_WALL, 2, 16)  # at 45° the slope has passed z = 13 here, well before 16
+
+
+@pytest.mark.parametrize("slope", [0, 60])
+def test_the_lips_still_hold_the_bar_at_any_slope(slope):
+    assert overlap(strip(arm_slope=slope), lift_path()) > 1
+    y = BORE * math.sin(math.radians(22.5))
+    assert inside(strip(arm_slope=slope), 19.03 / 2 + 0.1, y, 24)
+
+
+@pytest.fixture(scope="module")
+def straight_strip():
+    return strip(arm_slope=0)
+
+
+def test_at_zero_slope_the_arms_reach_the_wall(straight_strip):
+    assert inside(straight_strip, MID_WALL, 2, 1)
+    assert inside(straight_strip, -MID_WALL, 2, 1)
+    assert inside(straight_strip, MID_WALL, 2, STRIP_T + 1)
+
+
+def test_at_zero_slope_the_arms_sit_on_the_bed(straight_strip):
+    assert straight_strip.optimalBoundingBox().ZMin == pytest.approx(0, abs=0.01)
+    assert inside(straight_strip, MID_WALL, 2, 0.5)
+    assert not inside(straight_strip, MID_WALL, 2, -0.1)
+
+
+def test_at_zero_slope_the_seat_still_ends_at_the_stop(straight_strip):
+    assert inside(straight_strip, 0, -8, 5)
+    assert not inside(straight_strip, 0, -8, STRIP_T + 0.5)
+    assert overlap(straight_strip, bar()) == pytest.approx(0, abs=1e-6)
+
+
+def test_at_zero_slope_a_nut_still_drops_past_the_arm_into_the_end_slot(straight_strip):
+    path = Part.makeBox(7, 40, 3.2, V(88.5 - 3.5, -11, LEDGE))  # from the bolt to well above the arm's top
+    assert overlap(straight_strip, path) == pytest.approx(0, abs=1e-6)
+
+
 def test_strip_drop_moves_the_top_edge_and_the_arm_slope():
     s = strip(strip_drop=5)
     assert not inside(s, 45, -4.5, 3) and inside(s, 45, -5.5, 3)
@@ -155,6 +199,100 @@ def test_the_seat_ends_in_a_stop_so_the_bar_never_reaches_the_wall(default_strip
 
 def test_above_the_strip_the_cradle_is_open_to_the_wall(default_strip):
     assert not inside(default_strip, 0, 2, 3)
+
+
+# ---- leaning wall: the strip lies flat on the wall, the cradle's axis stays level
+
+
+LEAN = 3.9
+TAN = math.tan(math.radians(LEAN))  # 0.0682
+
+
+@pytest.fixture(scope="module")
+def leaning_strip():
+    return strip(wall_angle=LEAN)
+
+
+def level_bar(angle, x=0.0, d=20.0, start=1.0, length=60):
+    """A level bar as the strip sees it. On a wall leaning outward going up, the wall's normal points up into the box,
+    so level runs downward against the strip's y as it leaves the wall. Starts `start` mm clear of the stop."""
+    a = math.radians(angle)
+    axis = V(0, -math.sin(a), math.cos(a))
+    return Part.makeCylinder(d / 2, length, V(x, -start * math.tan(a), STRIP_T + start), axis)
+
+
+def test_a_level_bar_fits_the_seat_on_a_leaning_wall(leaning_strip):
+    assert overlap(leaning_strip, level_bar(LEAN)) == pytest.approx(0, abs=1e-6)
+
+
+@pytest.mark.parametrize("x", [-70, 70])
+def test_every_cradle_on_the_strip_is_tilted(leaning_strip, x):
+    assert overlap(leaning_strip, level_bar(LEAN, x)) == pytest.approx(0, abs=1e-6)
+
+
+def test_a_level_bar_collides_with_a_cradle_made_for_a_straight_wall(default_strip):
+    assert overlap(default_strip, level_bar(LEAN)) > 1
+
+
+def test_a_cradle_tilted_the_wrong_way_would_fail_the_level_bar(leaning_strip):
+    assert overlap(leaning_strip, level_bar(-LEAN)) > 1
+
+
+def test_the_seat_drops_along_the_strip_as_it_leaves_the_wall(leaning_strip):
+    # 16 mm past the stop at z = 24: down 16 × tan 3.9° = 1.09, so the floor runs from y = -11.39 to -14.39
+    assert not inside(leaning_strip, 0, -11.2, 24)
+    assert inside(leaning_strip, 0, -11.6, 24)
+    assert inside(leaning_strip, 0, -14.2, 24)
+    assert not inside(leaning_strip, 0, -14.6, 24)
+
+
+def test_the_seat_is_where_it_was_at_the_stop():
+    s = strip(wall_angle=LEAN, drain=False)
+    assert not inside(s, 0, -10.2, STRIP_T + 0.1)
+    assert inside(s, 0, -10.4, STRIP_T + 0.1)
+
+
+def test_the_tilt_stays_inside_the_flat_faces_for_the_bed_and_the_front(leaning_strip):
+    bb = leaning_strip.optimalBoundingBox()
+    assert (bb.ZMin, bb.ZMax) == (pytest.approx(0, abs=0.01), pytest.approx(25, abs=0.01))
+
+
+def test_the_strip_itself_does_not_tilt(leaning_strip):
+    assert inside(leaning_strip, 45, -18.5, 0.5) and inside(leaning_strip, 45, -18.5, STRIP_T - 0.1)
+    assert not inside(leaning_strip, 45, -3.2 + 0.4, 3) and inside(leaning_strip, 45, -3.2, 3)
+
+
+def test_the_lips_still_stand_in_the_way_out_on_a_leaning_wall(leaning_strip):
+    # 16 mm past the stop, the lip has dropped with the seat
+    y = BORE * math.sin(math.radians(22.5)) - 16 * TAN
+    assert inside(leaning_strip, 19.03 / 2 + 0.1, y, 24)
+    assert not inside(leaning_strip, 19.03 / 2 - 0.1, y, 24)
+
+
+def test_drain_still_runs_clear_through_a_tilted_floor(leaning_strip):
+    path = Part.makeBox(3.8, 30, 5.8, V(-1.9, -40, STRIP_T + 0.1))
+    assert overlap(leaning_strip, path) == pytest.approx(0, abs=1e-6)
+
+
+def test_bracket_ribs_follow_the_tilted_cradle():
+    s = strip(wall_angle=LEAN, bracket=True)
+    assert s.isValid() and len(s.Solids) == 1
+    assert overlap(s, level_bar(LEAN)) == pytest.approx(0, abs=1e-6)
+    assert inside(s, 3.5, -15.5, 24.9)  # the rib's front runs below the dropped floor
+    fall = Part.makeBox(3.9, 24, 5.9, V(-1.95, -34, STRIP_T + 0.01))
+    assert overlap(s, fall) == pytest.approx(0, abs=1e-6)
+
+
+def test_arm_slope_is_still_measured_from_the_wall_on_a_leaning_wall(leaning_strip):
+    # the cut belongs to the print, not the cradle: it still reaches y = 2 at z = 13
+    assert not inside(leaning_strip, MID_WALL, 2, 12)
+
+
+def test_straight_arms_still_sit_on_the_bed_on_a_leaning_wall():
+    s = strip(wall_angle=LEAN, arm_slope=0)
+    assert s.optimalBoundingBox().ZMin == pytest.approx(0, abs=0.01)
+    assert inside(s, MID_WALL, 2.3, 0.1)
+    assert overlap(s, level_bar(LEAN)) == pytest.approx(0, abs=1e-6)
 
 
 # ---- drain
@@ -380,11 +518,24 @@ def steep_overhang_heights(shape):
 
 
 @pytest.mark.parametrize("kw", [{}, {"bracket": True}, {"cradle_depth": 40, "bracket": True},
-                                {"wrap": 180, "drain": False}, {"nut_entry": "front"}])
+                                {"wrap": 180, "drain": False}, {"nut_entry": "front"},
+                                {"arm_slope": 0}, {"arm_slope": 60}, {"arm_slope": 0, "bracket": True},
+                                {"wall_angle": 3.9}, {"wall_angle": 3.9, "bracket": True},
+                                {"wall_angle": 8, "arm_slope": 0}])
 def test_strip_needs_no_supports_beyond_short_bridges(kw):
     # the only flat undersides allowed: the nut slots' ceilings, the bolt holes' ends and the drain's roof
     p = part("strip", **kw)
     assert steep_overhang_heights(to_bed(p.shape, p.rotation)) <= {NUT_TOP, 7.0, 14.0}
+
+
+def test_at_zero_slope_nothing_overhangs_at_all():
+    p = part("strip", arm_slope=0, nut_entry="front", drain=False)
+    assert steep_overhang_heights(to_bed(p.shape, p.rotation)) == set()
+
+
+def test_a_slope_shallower_than_45_overhangs_along_the_arms():
+    p = part("strip", arm_slope=30, nut_entry="front", drain=False)
+    assert steep_overhang_heights(to_bed(p.shape, p.rotation))
 
 
 def test_front_pockets_print_with_no_bridge_over_the_nut():
@@ -433,6 +584,17 @@ def test_bed_edges_are_chamfered_against_elephants_foot(default_strip):
     {"drain": False}, {"backplate": False}, {"bed_chamfer": 0},
     {"bar_d": 40, "pitch": 100, "strip_height": 14, "cradle_depth": 30},
     {"bar_d": 40, "pitch": 100, "strip_height": 14, "cradle_depth": 30, "bracket": True},
+    {"wall_angle": 3.9}, {"wall_angle": 3.9, "bracket": True}, {"wall_angle": 3.9, "arm_slope": 0},
+    {"wall_angle": 3.9, "arm_slope": 60}, {"wall_angle": 3.9, "nut_entry": "front"}, {"wall_angle": 3.9, "count": 1},
+    {"wall_angle": 3.9, "cradle_depth": 40, "bracket": True}, {"wall_angle": 15, "cradle_depth": 40},
+    {"wall_angle": 15, "cradle_depth": 40, "bracket": True, "bracket_height": 30},
+    {"wall_angle": 3.9, "bar_d": 40, "pitch": 100, "strip_height": 14, "cradle_depth": 30},
+    {"wall_angle": 3.9, "drain": False}, {"wall_angle": 3.9, "bar_d": 12, "wrap": 240, "bracket": True},
+    {"arm_slope": 0}, {"arm_slope": 0, "bracket": True}, {"arm_slope": 0, "nut_entry": "front"},
+    {"arm_slope": 0, "count": 1}, {"arm_slope": 0, "wrap": 180}, {"arm_slope": 0, "bar_d": 12},
+    {"arm_slope": 0, "bar_d": 40, "pitch": 100, "cradle_depth": 30, "strip_height": 14},
+    {"arm_slope": 30}, {"arm_slope": 60}, {"arm_slope": 60, "bracket": True},
+    {"arm_slope": 80, "cradle_depth": 60},
     {"nut_entry": "front"}, {"nut_entry": "front", "bracket": True}, {"nut_entry": "front", "count": 1},
     {"nut_entry": "front", "backplate": False}, {"count": 1, "strip_height": 14}, {"nut_af": 10, "strip_height": 18},
     {"bar_d": 12, "wrap": 240, "cradle_wall": 4, "bracket": True},

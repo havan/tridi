@@ -1,7 +1,7 @@
 """Every barholder parameter, with its default and range, and the rules that tie parameters together.
 
 Geometry helpers here use the same coordinates as `parts`: x along the wall, y up, z out of the wall into the box,
-with the bar's centre at x = cradle position, y = 0.
+with the bar's centre at x = cradle position, y = 0 where the bar's end meets the stop.
 """
 from __future__ import annotations
 
@@ -19,6 +19,8 @@ TIP_ROOM = 0.5  # room past a bolt's tip in its blind hole
 WASHER = 1.0  # thickness of a washer under a pan head, when there's no backplate
 HEAD_MARGIN = 1.0  # plastic between a bolt head's seat and the cradle's outside, along the strip
 MIN_SEAT = 10.0  # how much of a bar has to rest in a cradle
+MIN_LIP = 4.0  # how much of the snap's lip has to survive the arm slope, along the bar
+MIN_ARM_SLOPE = 30.0  # flatter than this is a shelf that can't print, and hardly frees the arms
 MOUTH_OPEN = 1.5  # how much wider than the bar's radius each side of the mouth opens at its top
 FLARE_ANGLE = 30.0  # the mouth's slope from vertical
 MIN_FLARE = 2.0  # the mouth's shortest flare, mm
@@ -38,6 +40,9 @@ class BarholderParams:
     cradle_depth: float = param(25, "how far a cradle stands out from the wall, mm; deeper forgives shorter bars",
                                 min=10, max=80)
     cradle_wall: float = param(3, "cradle wall thickness, mm; thinner makes a softer snap", min=1.6, max=8)
+    arm_slope: float = param(45, "slope of the cut behind the cradle's arms, degrees from the wall: steeper needs "
+                             "fewer supports but shortens the snap's lip, 0 is no cut, with the arms straight down to "
+                             "the wall and the print bed, and a much stiffer snap", min=0, max=80)
     # strip
     strip_height: float = param(16, "height of the strip, mm", min=8, max=60)
     strip_thickness: float = param(8, "thickness of the strip against the wall, mm", min=3, max=20)
@@ -45,6 +50,8 @@ class BarholderParams:
                               "snap", min=0, max=30)
     # box
     box_wall: float = param(2, "thickness of the box wall, mm", min=0.5, max=15)
+    wall_angle: float = param(0, "how far the box wall leans outward going up, degrees: the cradles tilt to match so "
+                              "the bars sit level. Plastic storage boxes usually lean, so measure yours", min=0, max=15)
     # backplate
     backplate: bool = param(True, "plate on the outside of the wall, spreads the load over the thin plastic")
     plate_thickness: float = param(4, "backplate thickness, mm", min=2, max=15)
@@ -148,6 +155,16 @@ def rib_top_y(p: BarholderParams) -> float:
     return (-math.sqrt(outer_r(p) ** 2 - b ** 2) - math.sqrt(bore_r(p) ** 2 - a ** 2)) / 2
 
 
+def tilt_drop(p: BarholderParams, z: float) -> float:
+    """How far the seat has dropped along the strip at z, past the stop, to stay level on a leaning wall."""
+    return (z - p.strip_thickness) * math.tan(math.radians(p.wall_angle))
+
+
+def rib_tip_y(p: BarholderParams) -> float:
+    """Where a bracket rib's slope meets the cradle's front edge, a little below the cradle."""
+    return -outer_r(p) - 2 - tilt_drop(p, p.cradle_depth)
+
+
 def _stock(length: float) -> int:
     for stock in STOCK_BOLTS:
         if stock >= length:
@@ -173,13 +190,23 @@ def blind_hole_depth(p: BarholderParams) -> float:
     return bolt_tip_z(p) + TIP_ROOM
 
 
+def lip_y(p: BarholderParams) -> float:
+    return bore_r(p) * math.sin(math.radians(lip_angle(p)))
+
+
 def min_cradle_depth(p: BarholderParams) -> float:
-    """The arms start on a 45° slope above the strip, and the seat has to hold the bar past the strip."""
-    _, top = flare_top(p)
-    return max(p.strip_thickness + MIN_SEAT, p.strip_thickness + top - strip_top(p) + 2)
+    """The seat has to hold the bar past the strip, and enough of the lip has to survive the arm slope."""
+    seat = p.strip_thickness + MIN_SEAT
+    if p.arm_slope == 0:
+        return seat
+    start = (lip_y(p) - strip_top(p)) * math.tan(math.radians(p.arm_slope))
+    return max(seat, p.strip_thickness + start + MIN_LIP)
 
 
 def _check_layout(p: BarholderParams) -> None:
+    if 0 < p.arm_slope < MIN_ARM_SLOPE:
+        raise ParamError(f"arm_slope ({p.arm_slope:g}) is nearly a flat shelf; use 0 for no cut, or at least "
+                         f"{MIN_ARM_SLOPE:g}")
     if p.count > 1 and p.pitch < 2 * (outer_r(p) + _head_clearance(p)):
         raise ParamError(f"pitch ({p.pitch:g}) leaves no room for a bolt between {2 * outer_r(p):g} mm wide cradles; "
                          f"use at least {2 * (outer_r(p) + _head_clearance(p)):g}")
@@ -230,14 +257,22 @@ def _check_bracket(p: BarholderParams) -> None:
     if reach <= 0 or math.sqrt(reach) <= math.sqrt(max(bore_r(p) ** 2 - a ** 2, 0)):
         raise ParamError(f"the bracket's ribs, {a:g} to {b:g} mm from the centre, miss a {2 * outer_r(p):g} mm wide "
                          f"cradle; use a thinner bracket_rib or a narrower drain_width")
+    if foot_y(p) > rib_tip_y(p):
+        needed = -outer_r(p) - rib_tip_y(p)
+        raise ParamError(f"bracket_height ({p.bracket_height:g}) puts the foot above the cradle's front edge, which "
+                         f"drops on a leaning wall; use at least {needed:g}")
 
 
 def _snap_note(p: BarholderParams) -> str:
     mouth = mouth_width(p)
     if mouth >= p.bar_d:
         return f"no snap: the mouth is {mouth:.1f} mm, so a {p.bar_d:g} mm bar lifts straight out"
-    return (f"snap: the mouth is {p.bar_d - mouth:.1f} mm narrower than a {p.bar_d:g} mm bar; if it's too stiff, lower "
+    note = (f"snap: the mouth is {p.bar_d - mouth:.1f} mm narrower than a {p.bar_d:g} mm bar; if it's too stiff, lower "
             f"wrap or cradle_wall, and print a single cradle (--count 1) to try it on your wood first")
+    if p.arm_slope == 0:
+        note += (". With arm_slope 0 the arms are rooted to the strip right up to the wall, so the snap is much "
+                 "stiffer: expect to need a lower wrap")
+    return note
 
 
 def effective(p: BarholderParams) -> tuple[BarholderParams, list[str]]:
@@ -270,4 +305,13 @@ def effective(p: BarholderParams) -> tuple[BarholderParams, list[str]]:
         f"distance minus {2 * (p.cradle_depth - MIN_SEAT):g} mm (keeps {MIN_SEAT:g} mm in each cradle)",
         _snap_note(p),
     ]
+    if p.wall_angle == 0:
+        notes.append("wall lean: plastic storage box walls usually lean outward going up, often by a few degrees. "
+                     "Measure yours and set wall_angle, or each bar will tilt that much in its cradles and rest on "
+                     "their edges")
+    else:
+        notes.append(f"wall lean: the cradles tilt {p.wall_angle:g}° against the strip, so the bars sit level on a wall "
+                     f"leaning outward by that much")
+    if 0 < p.arm_slope < 45:
+        notes.append(f"printing: an arm_slope of {p.arm_slope:g}° is flatter than 45°, so the arms will need supports")
     return p, notes

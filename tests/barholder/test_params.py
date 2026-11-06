@@ -169,3 +169,61 @@ def test_an_open_front_pocket_only_has_to_hide_the_bolt_tip():
 def test_a_nut_wider_than_the_head_still_clears_the_cradle():
     wide = BarholderParams(nut_af=10)
     assert bolt_xs(wide)[-1] > bolt_xs(BarholderParams())[-1]
+
+
+@pytest.mark.parametrize("slope", [1, 15, 29])
+def test_a_slope_too_flat_to_print_or_to_mean_much_is_refused(slope):
+    with pytest.raises(ParamError, match="arm_slope"):
+        effective(BarholderParams(arm_slope=slope))
+
+
+def test_a_steep_slope_needs_a_deep_enough_cradle_to_keep_a_lip():
+    effective(BarholderParams(arm_slope=60))  # lip starts at 8 + 6.94 × tan 60° = 20 mm of 25
+    with pytest.raises(ParamError, match="cradle_depth"):
+        effective(BarholderParams(arm_slope=70))  # would start at 27 mm, past the front
+    effective(BarholderParams(arm_slope=70, cradle_depth=32))
+
+
+def test_zero_slope_only_needs_the_seat_depth():
+    effective(BarholderParams(arm_slope=0, cradle_depth=18, drain=False))  # 8 mm strip + 10 mm seat
+    with pytest.raises(ParamError, match="cradle_depth"):
+        effective(BarholderParams(arm_slope=0, cradle_depth=17, drain=False))
+
+
+def test_notes_warn_that_straight_arms_snap_stiffer():
+    assert "stiffer" in notes(arm_slope=0)
+    assert "stiffer" not in notes()
+
+
+def test_straight_arms_do_not_warn_about_a_snap_they_do_not_have():
+    assert "stiffer" not in notes(arm_slope=0, wrap=180)
+
+
+@pytest.mark.parametrize("slope", [30, 44])
+def test_notes_warn_when_a_slope_will_need_supports(slope):
+    assert "supports" in notes(arm_slope=slope)
+
+
+@pytest.mark.parametrize("slope", [0, 45, 60])
+def test_notes_stay_quiet_about_supports_on_a_printable_slope(slope):
+    assert "supports" not in notes(arm_slope=slope)
+
+
+def test_notes_warn_about_leaning_walls_when_no_angle_is_given():
+    text = notes()
+    assert "wall_angle" in text and "lean" in text
+
+
+def test_notes_stop_warning_once_an_angle_is_given():
+    assert "measure" not in notes(wall_angle=3.9)
+    assert "3.9" in notes(wall_angle=3.9)
+
+
+def test_a_bracket_whose_foot_is_above_its_tilted_tip_is_refused():
+    # at z = 80 the floor has dropped 72 × tan 15° = 19 mm, well below a foot 5 mm under the cradle's back
+    with pytest.raises(ParamError, match="bracket_height"):
+        effective(BarholderParams(wall_angle=15, cradle_depth=80, bracket=True, bracket_height=5))
+
+
+def test_the_same_short_bracket_is_fine_on_a_straight_wall():
+    effective(BarholderParams(cradle_depth=80, bracket=True, bracket_height=5))

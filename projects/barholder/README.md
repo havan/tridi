@@ -4,12 +4,18 @@ Snap-in holders for the bars in a drying box, such as a biltong box made from a 
 U-shaped cradles bolts to the inside of the wall, with a backplate on the outside to spread the load over the thin
 plastic. Bars press in from above and pull out by hand for cleaning. Print one set for each of two opposite walls.
 
+**Check your box's walls first.** Plastic storage boxes usually have walls that lean outward going up, so they stack.
+The default assumes a straight wall. If yours leans, set `--wall-angle` or the bars will sit tilted in their cradles.
+
 ```
+pixi run build barholder --wall-angle 3.9                  # a wall leaning outward 3.9°: bars still sit level
 pixi run build barholder                                   # 3 cradles for 20 mm bars, 70 mm apart, on a 2 mm wall
 pixi run build barholder --preset test_fit                 # one cradle: try the snap on your wood first
 pixi run build barholder --bar-d 25 --pitch 80 --count 2   # other bars, other spacing
 pixi run build barholder --cradle-depth 40 --bracket       # deep cradles with a support bracket underneath
 pixi run build barholder --wrap 180                        # a plain half circle, no snap
+pixi run build barholder --arm-slope 60                    # a steeper cut behind the arms, easier to print
+pixi run build barholder --arm-slope 0 --wrap 215          # no cut: arms straight down to the wall, lighter snap
 pixi run build barholder --no-backplate                    # washers instead of a plate
 pixi run build barholder --nut-entry front                 # nut pockets open on the meat side instead of a slot
 pixi run build barholder --no-drain                        # closed cradle floor
@@ -20,6 +26,17 @@ Output goes to `out/barholder/<variant>/`: `strip` and `backplate` as STL and 3M
 plus `assembly.step`, an `.FCStd` and `summary.txt`. The summary lists the bolts to buy, where to drill and which bar
 lengths fit.
 
+## Measuring the wall's lean
+
+The lean of one wall is `atan(offset / height)`. Stand the box on a flat surface and hold something square against the
+wall's foot: the height is how far up you measure, and the offset is how far that one wall has moved outward by then.
+For example, 25 mm of offset over 370 mm of height is 3.9°. Comparing the box's top and bottom widths gives you both
+walls added together, so halve that difference first.
+
+The cradles tilt against the strip by this angle, so the strip stays flat on the wall and the bar stays level. The
+strip's bolt holes, the backplate and the way it prints all stay the same. Fit it with its top edge up, as always, and
+drill both walls at the same height.
+
 ## Sizing the fit
 
 - **`--bar-d`:** measure your bars with calipers, since wood varies and swells. `--bar-fit` is the gap around the bar
@@ -29,6 +46,11 @@ lengths fit.
   so print `--preset test_fit` first. If it's too stiff, lower `--wrap`, `--cradle-wall` or both.
 - **`--cradle-depth`:** deeper cradles forgive shorter bars, and storage box walls usually lean outward, so the gap
   between them grows with height. The summary gives the range of bar lengths that fit.
+- **`--arm-slope`:** the cut behind the arms, in degrees from the wall, which keeps them flexible near the wall.
+  Slicers often flag the default 45° as needing supports, so go steeper if yours does. 60° leaves about 5 mm of lip at
+  each end of a default 25 mm cradle, and if the slope leaves too little lip the build asks for a deeper cradle. At 0
+  there's no cut and nothing to support, but the arms are rooted to the strip right up to the wall, so the snap is much
+  stiffer: lower `--wrap` and try `--preset test_fit`, or use `--wrap 180` for no snap at all.
 - **`--count`:** a strip longer than your printer's bed is refused. Mount several strips side by side on a long wall.
 
 ## What to buy
@@ -56,7 +78,7 @@ Without the backplate it's M4×10 pan-head bolts with a washer outside the wall.
 No supports, no brim. Each part is exported the way it should print, wall side down:
 
 - **Strip:** the cradles stand up from the bed, so the layers follow the U and the snap arms flex along their layers
-  rather than across them. Above the strip the arms rise on a 45° slope. Without it they'd be fused to the strip all
+  rather than across them. Above the strip the arms rise on a slope, 45° by default. Without it they'd be fused to the strip all
   along their depth and far too stiff to snap near the wall. The only overhangs are short bridges over the nut slots,
   the bolt holes' ends and the drain.
 - **Backplate:** bolt seats up.
