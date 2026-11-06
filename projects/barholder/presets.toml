@@ -1,0 +1,11 @@
+# Example presets: pixi run build barholder --preset <name>
+# Put your own in local.toml at the repo root, as [barholder.<name>] tables.
+
+# One cradle, to try the snap on your wood before printing a whole strip
+[test_fit]
+count = 1
+
+# Deep cradles for bars cut well short of the box, held up by the support bracket
+[deep]
+cradle_depth = 40
+bracket = true
