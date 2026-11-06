@@ -1,7 +1,7 @@
 import pytest
 
 from projects.grommet.params import (GrommetParams, effective, grip_span, root_d, slot_height, slot_width, stem_end,
-                                     thread_d)
+                                     thread_d, thread_start)
 from tridi.params import ParamError
 
 
@@ -39,6 +39,11 @@ def test_thick_wall_lengthens_the_stem_only():
     assert p.hole_d == 13
 
 
+def test_thread_reaches_the_disc_on_a_thin_wall_but_stays_near_the_nut_on_a_thick_one():
+    assert thread_start(resolved()) == pytest.approx(2.5)
+    assert thread_start(resolved(wall_thickness=20)) == pytest.approx(22.5 - 5)
+
+
 def test_grip_sits_under_the_nut():
     p = resolved()
     z0, z1, ridges = grip_span(p)
@@ -69,3 +74,11 @@ def test_thick_round_wire_notes_too_few_ridges():
     p, notes = effective(GrommetParams(wire_shape="round", wire_d=10))
     assert grip_span(p)[2] == 1
     assert any("ridge" in n for n in notes)
+
+
+def test_summary_says_what_to_cut_and_how_low_it_can_sit():
+    notes = " | ".join(effective(GrommetParams())[1])
+    assert "13 mm hole" in notes
+    assert "11.75 mm" in notes  # the nut's radius and 1 mm above the inside floor
+    assert "2.3 mm" in notes  # the slot at a ridge, against a 2.5 mm wire
+    assert "nothing to buy" in notes

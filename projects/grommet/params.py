@@ -46,7 +46,7 @@ class GrommetParams:
     nut_d: float | None = param(None, "nut's diameter, mm (auto: thread + 8, or what its joint needs)", min=8, max=130)
     nut_height: float = param(7, "nut's height, mm: the grip runs under the nut, so a taller nut grips more wire",
                               min=4, max=40)
-    body_wall: float = param(2.5, "plastic from the wire's slot to the thread's root, mm", min=1, max=10)
+    body_wall: float = param(2.5, "plastic from the wire's slot to the thread's root, mm", min=2, max=10)
     # grip
     grip_squeeze: float = param(0.2, "how much smaller than the wire the slot is at a ridge's top, mm", min=0, max=3)
     grip_wave: float = param(0.2, "how far each ridge shifts the wire off centre, mm", min=0, max=2)
@@ -92,6 +92,11 @@ def root_d(p: GrommetParams) -> float:
 def nut_z0(p: GrommetParams) -> float:
     """The nut's wall face."""
     return p.disc_thickness + p.wall_thickness
+
+
+def thread_start(p: GrommetParams) -> float:
+    """Right down to the disc on a thin wall. On a thick one the stem is plain until just before the nut's position."""
+    return max(p.disc_thickness, nut_z0(p) - 2 * p.thread_pitch)
 
 
 def stem_end(p: GrommetParams) -> float:
@@ -179,6 +184,16 @@ def _settle(p: GrommetParams, problems: list[str]) -> list[str]:
     return [f"forced: {m}" for m in problems]
 
 
+def _summary(p: GrommetParams) -> list[str]:
+    tightest = wire_h(p) - p.grip_squeeze
+    return [f"cut: a {p.hole_d:g} mm hole in the {p.wall_thickness:g} mm wall",
+            f"flat wall needed: {p.disc_d:g} mm across outside for the disc, {p.nut_d:g} mm inside for the nut",
+            f"how low: the hole's centre at least {p.nut_d / 2 + 1:g} mm above the inside floor, and {p.disc_d / 2:g} mm "
+            f"clear of any curve in the wall outside",
+            f"grip: {wire_h(p):g} mm wire, {tightest:g} mm slot at a ridge, {grip_span(p)[2]} ridges under the nut",
+            "hardware: nothing to buy"]
+
+
 def effective(p: GrommetParams, printer_clearance: float = 0.2) -> tuple[GrommetParams, list[str]]:
     """Fill in the auto values, refuse sizes that can't work, and list what to cut."""
     given = p
@@ -188,4 +203,5 @@ def effective(p: GrommetParams, printer_clearance: float = 0.2) -> tuple[Grommet
     if ridges < 2:
         notes.append(f"grip: only {ridges} ridge fits under a {p.nut_height:g} mm nut with this wire; a taller nut "
                      f"(nut_height) gives more")
+    notes += _summary(p)
     return p, notes

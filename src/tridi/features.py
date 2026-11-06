@@ -95,6 +95,9 @@ def hex_prisms(centres: list[tuple[float, float]], across_flats: float, z0: floa
     return Part.makeCompound(out)
 
 
+THREAD_SEAM = 37.0  # degrees: off the axes, since a part split on an axis plane cuts badly along a surface's seam
+
+
 def _thread_radius(u: float, root_r: float, crest_r: float, pitch: float) -> float:
     """Radius at a fraction `u` of a turn along a trapezoid thread with 45° flanks."""
     depth = crest_r - root_r
@@ -121,8 +124,9 @@ def threaded_rod(root_d: float, crest_d: float, pitch: float, z0: float, z1: flo
     def section(z: float) -> Part.Wire:
         pts = []
         for i in range(points):
-            a = 2 * math.pi * i / points
-            u = i / points - (z - phase_z) / pitch
+            turn = i / points + THREAD_SEAM / 360
+            a = 2 * math.pi * turn
+            u = turn - (z - phase_z) / pitch
             r = sum(_thread_radius(u + d, root_r, crest_r, pitch) for d in average) / len(average)
             pts.append(Vector(r * math.cos(a), r * math.sin(a), z))
         curve = Part.BSplineCurve()

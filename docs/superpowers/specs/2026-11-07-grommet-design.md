@@ -71,7 +71,9 @@ From the outside face inward, at the user's size:
 | Spare thread past the nut | 1.5 mm |
 | **Total** | **13 mm, about 2.5 mm outside and 8.5 mm inside** |
 
-The threads run all the way down to the disc. That is the change that makes a thin wall work. The parts could also be
+The threads run all the way down to the disc on a thin wall. That is the change that makes a thin wall work. *Changed
+while building:* on a thick wall the stem is plain until two pitches before the nut's position, because a long thread
+is slow to build and the nut never needs it there. The parts could also be
 fitted the other way round, nut outside, with no change to the model.
 
 ## Parts
@@ -114,11 +116,11 @@ Each has a range, a CLI flag and preset support, as in `flange`. Everything mark
 
 | Parameter | Rule | Your wire |
 |---|---|---|
-| `body_wall` | plastic from the slot to the thread's root, default 2.5 mm | 2.5 mm |
+| `body_wall` | plastic from the slot to the thread's root, default 2.5 mm, at least 2 mm so the mouths stay inside it | 2.5 mm |
 | `hole_d` | when auto: smallest whole or half millimetre that fits the thread's minimum size + 0.5 mm | 13 mm |
 | `disc_d` | hole + 11.5 mm | 24.5 mm |
 | `disc_thickness` | default 2.5 mm | 2.5 mm |
-| `nut_d` | thread's outside diameter + 8 mm, or more if the joint needs it | 20.5 mm |
+| `nut_d` | thread's outside diameter + 8 mm, or more if the joint needs it, rounded up to a half millimetre | 21.5 mm |
 | `nut_height` | default 7 mm. The grip runs under the nut, so a taller nut is what lengthens the grip | 7 mm |
 
 The minimum thread size is the slot's largest size plus twice `body_wall` at the root, and 2 mm more at the outside:
@@ -197,7 +199,9 @@ into the box.
   `thread_pitch`.
 - Radial clearance between the threads follows the printer's `clearance` by default, adjustable as `thread_clearance`.
 - The nut's two pieces join with a T-shaped tab sliding along the axis, as on the original. `nut_a` carries both tabs
-  and `nut_b` both sockets. Sockets are closed at the bed end, so the tab stops where the thread lines up.
+  and `nut_b` both sockets. Tabs start on the bed and sockets are closed at the far end with a short bridged roof, so
+  the tab stops where the thread lines up. *Changed while building:* sockets closed at the bed end would have left the
+  tab overhanging in mid-air.
 - At 4 mm of radial wall, the joint is tight at a 0.4 mm nozzle. The builder must check that the tab's neck and the
   walls around the socket are printable, and grow `nut_d` to suit, up to about 23 mm for the user's wire.
 - The two body halves must line up along the axis to within about 0.2 mm, or the thread won't run across the split and
@@ -271,7 +275,7 @@ wire, a thick wall, and a bigger hole for a connector.
 `summary.txt` adds:
 
 - The hole to cut.
-- How close the hole's centre can be to the inside floor: nut radius + 1 mm, about 11.5 mm for the user's wire.
+- How close the hole's centre can be to the inside floor: nut radius + 1 mm, about 11.75 mm for the user's wire.
 - How much flat wall is needed: `disc_d` outside and `nut_d` inside. If the box's outside corner curves, the disc needs
   to clear that too.
 - The tightest slot size next to the wire size, so the squeeze can be checked at a glance.
