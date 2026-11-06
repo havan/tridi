@@ -11,7 +11,7 @@ from FreeCAD import Vector
 
 from tridi.features import assert_single_solid, countersunk_hole, hex_prisms
 
-from .layout import bar_segments, hub_xy, rim_bolt_xy, spine, spine_distance
+from .layout import bar_segments, cell_circumradius, hub_xy, mesh_cells, rim_bolt_xy, spine, spine_distance
 from .params import NUT_ROOM, SINK, FlangeParams, hole_d, outer_z0
 
 EPS = 1e-6
@@ -75,22 +75,57 @@ def _near(edge, centre: tuple[float, float], reach: float) -> bool:
     return math.hypot(mid.x - centre[0], mid.y - centre[1]) <= reach
 
 
+def _cell_wire(p: FlangeParams, x: float, y: float, z: float) -> Part.Wire:
+    """One mesh hole, clockwise: `cutHoles` only cuts wires wound against the face's outline. The first vertex puts
+    the hole's flats square to its lattice neighbours, so the rib between them is mesh_rib wide."""
+    sides, offset = (4, 45) if p.mesh == "grid" else (6, 30)
+    radius = cell_circumradius(p)
+    angles = [math.radians(p.mesh_angle + offset - k * 360 / sides) for k in range(sides + 1)]
+    return Part.makePolygon([Vector(x + radius * math.cos(a), y + radius * math.sin(a), z) for a in angles])
+
+
+def _mesh_layer(p: FlangeParams, z0: float, height: float) -> Part.Shape:
+    """The part's whole footprint with the holes in it, or solid for the slicer. Faces with holes are far quicker than
+    a boolean cut per hole."""
+    r, s = spine(p)
+    face = Part.Face(stadium_wire(r + p.rim, s, z0))
+    cells = mesh_cells(p)
+    if cells:
+        face.cutHoles([_cell_wire(p, x, y, z0) for x, y in cells])
+    return face.extrude(Vector(0, 0, height))
+
+
 def build_outer(p: FlangeParams, clearance: float) -> Part.Shape:
-    """The visible piece. Bolt heads seat flush in its outside face. It prints wall side down."""
+    """The visible piece. Bolt heads seat flush in its outside face. It prints wall side down, so a printed mesh lies
+    flat on the bed, with the rest of the piece standing as a frame around it."""
     r, s = spine(p)
     z0 = outer_z0(p)
-    top = z0 + p.outer_thickness
-    shape = _ring(r + p.rim, r, s, z0, p.outer_thickness)
-    web = _hubs_and_bars(p, z0, p.outer_thickness)
-    if web:
-        shape = shape.fuse(web)
-    seats = [countersunk_hole(Vector(x, y, top - SINK), Vector(0, 0, 1), p.outer_thickness - SINK, hole_d(p),
+    layer = 0 if p.mesh == "wire" else p.mesh_thickness
+    thick = max(p.outer_thickness, layer)
+    top = z0 + thick
+    pieces = []
+    if layer > 0:
+        pieces.append(_mesh_layer(p, z0, layer))
+    if thick > layer:
+        pieces += [_ring(r + p.rim, r, s, z0 + layer, thick - layer), *_hubs_and_bars(p, z0 + layer, thick - layer)]
+    shape = pieces[0].fuse(pieces[1:]) if len(pieces) > 1 else pieces[0]
+    seats = [countersunk_hole(Vector(x, y, top - SINK), Vector(0, 0, 1), thick - SINK, hole_d(p),
                               p.head_d + 2 * clearance) for x, y in _bolts(p)]
     if seats:
         shape = shape.cut(seats)
     shape = shape.removeSplitter()
     outline = [e for e in _bed_edges(shape, z0) if _on_outline(e, r + p.rim, s)]
     return assert_single_solid(_chamfer(shape, outline, p.bed_chamfer), "outer piece")
+
+
+def build_mesh_zone(p: FlangeParams) -> Part.Shape:
+    """Where the slicer should replace the solid with infill: the opening, less any bars and hubs. Load it as a
+    modifier. It stays one shape with several regions when bars divide the opening."""
+    r, s = spine(p)
+    z0 = outer_z0(p)
+    zone = Part.Face(stadium_wire(r, s, z0)).extrude(Vector(0, 0, p.mesh_thickness))
+    web = _hubs_and_bars(p, z0, p.mesh_thickness)
+    return zone.cut(web).removeSplitter() if web else zone
 
 
 def build_inner(p: FlangeParams, clearance: float) -> Part.Shape:
