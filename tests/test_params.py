@@ -93,3 +93,18 @@ def test_cli_plural_option_names():
     parser = argparse.ArgumentParser()
     add_cli_arguments(Toy, parser)
     assert "--notch" in parser._option_string_actions
+
+
+@dataclass(frozen=True)
+class Forceable:
+    width: float = param(200, "w", min=40, max=1000)
+    side: str = param("below", "s", choices=("below", "above"))
+    force: bool = param(False, "f")
+
+
+def test_force_skips_ranges_but_not_choices():
+    with pytest.raises(ParamError, match="width"):
+        resolve(Forceable, {}, None, {"width": 5})
+    assert resolve(Forceable, {}, None, {"width": 5, "force": True}).width == 5
+    with pytest.raises(ParamError, match="side"):
+        resolve(Forceable, {}, None, {"side": "up", "force": True})

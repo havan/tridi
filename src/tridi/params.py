@@ -54,7 +54,7 @@ def validate(obj) -> None:
         meta = f.metadata
         if meta.get("choices") is not None and value not in meta["choices"]:
             raise ParamError(f"{name} = {value!r} is not one of: {', '.join(map(str, meta['choices']))}")
-        if base in (int, float):
+        if base in (int, float) and not getattr(obj, "force", False):
             if meta.get("min") is not None and value < meta["min"]:
                 raise ParamError(f"{name} = {_fmt(value)} is below the minimum {_fmt(meta['min'])}")
             if meta.get("max") is not None and value > meta["max"]:

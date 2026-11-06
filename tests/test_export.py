@@ -65,3 +65,29 @@ def test_count_too_many_for_bed(tmp_path):
     with pytest.raises(FitError):
         _export(tmp_path, [_block(count=40)], Printer("t", "Small", 50, 50, 50))
     assert not (tmp_path / "out").exists()
+
+
+def _base_and_zone():
+    base = PrintPart("base", Part.makeBox(50, 50, 4, V(-25, -25, 7)), FreeCAD.Rotation(), orientation="flat")
+    zone = PrintPart("zone", Part.makeBox(10, 10, 4, V(-5, -5, 7)), FreeCAD.Rotation(), modifier_of="base",
+                     orientation="slicer modifier")
+    return base, zone
+
+
+def test_modifier_part_shares_its_parents_bed_frame_and_is_left_out_of_totals(tmp_path):
+    out, summary = _export(tmp_path, list(_base_and_zone()))
+    bb = Mesh.Mesh(str(out / "zone.stl")).BoundBox
+    assert (bb.XMin, bb.XMax, bb.YMin, bb.YMax) == pytest.approx((20, 30, 20, 30), abs=1e-6)
+    alone, summary_alone = _export(tmp_path / "alone", [_base_and_zone()[0]])
+    total = [line for line in summary.read_text().splitlines() if line.startswith("total:")]
+    assert total == [line for line in summary_alone.read_text().splitlines() if line.startswith("total:")]
+    assert "zone ×1: slicer modifier" in summary.read_text()
+    assert len(Part.read(str(out / "assembly.step")).Solids) == 1
+
+
+def test_force_exports_a_part_that_does_not_fit(tmp_path):
+    out = tmp_path / "out"
+    summary = export([_block()], out, title="thing", params={}, printer=Printer("t", "Tiny", 10, 10, 10), notes=[],
+                     force=True)
+    assert (out / "block.stl").exists()
+    assert "forced: block: 20.0 × 5.0 × 10.0 mm does not fit Tiny" in summary.read_text()
