@@ -10,6 +10,6 @@ __pycache__/
 *.FCStd1
 # personal presets
 local.toml
-.claude/settings.local.json
+.claude/
 # agent scratch (plans, ledgers)
 .superpowers/
