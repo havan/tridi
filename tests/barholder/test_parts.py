@@ -8,15 +8,18 @@ import Part
 from FreeCAD import Vector as V
 
 from projects.barholder import build
-from projects.barholder.params import BarholderParams, effective
+from projects.barholder.params import BarholderParams, bolt_tip_z, effective
 from projects.barholder.parts import build_plate, build_strip
 from tridi.export import to_bed
+from tridi.features import hex_prisms
 from tridi.printers import get_printer, load_printers
 
 CLEAR = 0.2
 BORE = 10.3
 MID_WALL = 11.8  # the middle of the cradle's wall: bore 10.3 + half of the 3 mm wall
-STRIP_T = 7
+STRIP_T = 8
+LEDGE = 2
+NUT_TOP = 5.4  # the slot's ceiling: ledge 2 + nut 3.2 + 0.2 of room
 PRINTER = get_printer("mk3s", load_printers())
 
 
@@ -179,24 +182,89 @@ def test_drain_can_be_turned_off():
 # ---- bolts and nuts
 
 
+ENTRIES = ["top", "front"]
+
+
+@pytest.fixture(scope="module")
+def front_strip():
+    return strip(nut_entry="front")
+
+
+def nut(x, y, z0=LEDGE, length=3.2, af=7.0):
+    """A nut's solid, flats facing ±x as it has to sit to enter the slot."""
+    return hex_prisms([(x, y)], af, z0, length, "y")
+
+
+@pytest.mark.parametrize("entry", ENTRIES)
 @pytest.mark.parametrize("x", [-88.5, -35, 35, 88.5])
-def test_each_bolt_has_a_nut_pocket_opening_toward_the_wall(default_strip, x):
-    assert not inside(default_strip, x, -11, 0.5)
-    assert not inside(default_strip, x + 3.4, -11, 3.2)  # 7.2 mm across flats, flats facing ±x
-    assert inside(default_strip, x + 3.8, -11, 3.2)
-    assert inside(default_strip, x + 3, -11, 3.6)  # the nut stops at the pocket's ceiling
+def test_tightening_clamps_the_strip_because_the_nut_pulls_on_plastic(entry, x):
+    # the bolt pulls the nut toward the wall, so there has to be plastic between them all round the hole
+    s = strip(nut_entry=entry)
+    for dx, dy in ((3.0, 0), (-3.0, 0), (0, 3.0), (0, -3.0)):
+        assert inside(s, x + dx, -11 + dy, 1)  # the ledge
+        assert not inside(s, x + dx, -11 + dy, LEDGE + 0.2)  # the nut's place
+
+
+@pytest.mark.parametrize("entry", ENTRIES)
+def test_the_bolt_passes_the_ledge_through_its_hole(entry):
+    s = strip(nut_entry=entry)
+    assert not inside(s, 35, -11, 1) and not inside(s, 35 + 2, -11, 1)
+    assert inside(s, 35 + 2.4, -11, 1)
+
+
+@pytest.mark.parametrize("entry", ENTRIES)
+def test_a_nut_at_the_bolt_touches_nothing(entry):
+    assert overlap(strip(nut_entry=entry), nut(35, -11)) == pytest.approx(0, abs=1e-6)
 
 
 @pytest.mark.parametrize("x", [-88.5, -35, 35, 88.5])
-def test_no_bolt_or_nut_shows_on_the_meat_side(default_strip, x):
-    assert not inside(default_strip, x, -11, 4.7)  # room for an M4×10's tip at 4.5 mm
-    assert inside(default_strip, x, -11, 5.5)
+def test_slot_lets_a_nut_drop_in_from_the_strips_top_edge(default_strip, x):
+    path = Part.makeBox(7, 11, 3.2, V(x - 3.5, -11, LEDGE))  # from the bolt to above the strip's top at -3
+    assert overlap(default_strip, path) == pytest.approx(0, abs=1e-6)
+
+
+def test_slot_stops_a_dropped_nut_centred_on_the_bolt(default_strip):
+    assert overlap(default_strip, nut(35, -12)) > 1
+
+
+def test_slot_holds_the_nut_from_turning(default_strip):
+    assert not inside(default_strip, 35 + 3.6, -11, 3.5)  # 7.4 mm across flats: a sliding fit
+    assert inside(default_strip, 35 + 3.8, -11, 3.5)
+
+
+def test_slot_is_a_low_ceiling_with_the_meat_side_closed(default_strip):
+    assert not inside(default_strip, 35 + 3, -11, NUT_TOP - 0.1)
+    assert inside(default_strip, 35 + 3, -11, NUT_TOP + 0.1)
+    assert inside(default_strip, 35 + 3, -11, STRIP_T - 0.1)
+
+
+@pytest.mark.parametrize("x", [-88.5, -35, 35, 88.5])
+def test_no_bolt_or_nut_shows_on_the_meat_side_with_a_slot(default_strip, x):
+    assert not inside(default_strip, x, -11, 6.8)  # room for an M4×12's tip at 6.5 mm
+    assert inside(default_strip, x, -11, 7.2)
     assert inside(default_strip, x, -11, STRIP_T - 0.1)
 
 
 def test_blind_hole_follows_the_bolt_length():
-    s = strip(box_wall=3)  # M4×12: tip at 5.5 mm
-    assert not inside(s, 35, -11, 5.7) and inside(s, 35, -11, 6.5)
+    s = strip(box_wall=3, strip_thickness=11)  # M4×16: tip at 9.5 mm
+    assert not inside(s, 35, -11, 9.8) and inside(s, 35, -11, 10.2)
+
+
+def test_front_pocket_opens_toward_the_meat_side(front_strip):
+    path = nut(35, -11, length=20)
+    assert overlap(front_strip, path) == pytest.approx(0, abs=1e-6)
+    assert not inside(front_strip, 35, -11, STRIP_T - 0.1)
+
+
+def test_front_pocket_is_a_push_fit_closed_at_the_top_edge(front_strip):
+    assert not inside(front_strip, 35 + 3.4, -11, 4)  # 7.2 mm across flats
+    assert inside(front_strip, 35 + 3.8, -11, 4)
+    assert inside(front_strip, 35, -5, 4)
+
+
+def test_bolt_tip_stays_inside_the_front_pocket():
+    p = effective(BarholderParams(nut_entry="front"))[0]
+    assert bolt_tip_z(p) < p.strip_thickness
 
 
 def test_a_single_cradle_only_has_end_holes():
@@ -229,7 +297,8 @@ def outline_size(shape, z):
     return box.XLength, box.YLength
 
 
-@pytest.mark.parametrize("kw", [{}, {"bracket": True}, {"bar_d": 40, "pitch": 100, "strip_height": 14}])
+@pytest.mark.parametrize("kw", [{}, {"bracket": True},
+                                {"bar_d": 40, "pitch": 100, "strip_height": 14, "cradle_depth": 30}])
 def test_plate_has_the_strips_outline(kw):
     assert outline_size(plate(**kw), -2.5) == pytest.approx(outline_size(strip(**kw), 0.5), abs=0.05)
 
@@ -259,8 +328,8 @@ def test_ribs_reach_the_front_of_the_cradle(bracket_strip):
 
 
 def test_ribs_slope_down_to_the_foot_at_the_wall(bracket_strip):
-    # 20 mm bracket: foot at y = -33.3; slope from z = 7 there to z = 25 at y = -15.3
-    assert inside(bracket_strip, 3.5, -33, 7.1)
+    # 20 mm bracket: foot at y = -33.3; slope from z = 8 there to z = 25 at y = -15.3
+    assert inside(bracket_strip, 3.5, -33, 8.1)
     assert not inside(bracket_strip, 3.5, -30, 16)
     assert inside(bracket_strip, 3.5, -20, 16)
 
@@ -311,11 +380,16 @@ def steep_overhang_heights(shape):
 
 
 @pytest.mark.parametrize("kw", [{}, {"bracket": True}, {"cradle_depth": 40, "bracket": True},
-                                {"wrap": 180, "drain": False}])
+                                {"wrap": 180, "drain": False}, {"nut_entry": "front"}])
 def test_strip_needs_no_supports_beyond_short_bridges(kw):
-    # the only flat undersides allowed: the nut pockets' ceilings, the bolt holes' ends and the drain's roof
+    # the only flat undersides allowed: the nut slots' ceilings, the bolt holes' ends and the drain's roof
     p = part("strip", **kw)
-    assert steep_overhang_heights(to_bed(p.shape, p.rotation)) <= {3.4, 5.0, 13.0}
+    assert steep_overhang_heights(to_bed(p.shape, p.rotation)) <= {NUT_TOP, 7.0, 14.0}
+
+
+def test_front_pockets_print_with_no_bridge_over_the_nut():
+    p = part("strip", nut_entry="front", drain=False)
+    assert steep_overhang_heights(to_bed(p.shape, p.rotation)) == set()
 
 
 def test_plate_prints_with_the_wall_side_on_the_bed_and_seats_up():
@@ -350,15 +424,17 @@ def test_bed_edges_are_chamfered_against_elephants_foot(default_strip):
 
 
 @pytest.mark.parametrize("kw", [
-    {"bar_d": 12}, {"bar_d": 25}, {"bar_d": 40, "pitch": 100},
+    {"bar_d": 12}, {"bar_d": 25}, {"bar_d": 40, "pitch": 100, "cradle_depth": 30},
     {"count": 1}, {"count": 1, "bracket": True}, {"count": 2, "pitch": 50},
     {"wrap": 180}, {"wrap": 200}, {"wrap": 240},
     {"cradle_depth": 60, "bracket": True, "bracket_height": 40},
     {"cradle_wall": 2}, {"cradle_wall": 5},
     {"strip_height": 24}, {"strip_drop": 0}, {"strip_drop": 6},
     {"drain": False}, {"backplate": False}, {"bed_chamfer": 0},
-    {"bar_d": 40, "pitch": 100, "strip_height": 14},
-    {"bar_d": 40, "pitch": 100, "strip_height": 14, "bracket": True},
+    {"bar_d": 40, "pitch": 100, "strip_height": 14, "cradle_depth": 30},
+    {"bar_d": 40, "pitch": 100, "strip_height": 14, "cradle_depth": 30, "bracket": True},
+    {"nut_entry": "front"}, {"nut_entry": "front", "bracket": True}, {"nut_entry": "front", "count": 1},
+    {"nut_entry": "front", "backplate": False}, {"count": 1, "strip_height": 14}, {"nut_af": 10, "strip_height": 18},
     {"bar_d": 12, "wrap": 240, "cradle_wall": 4, "bracket": True},
 ])
 def test_common_variants_build_one_valid_solid(kw):

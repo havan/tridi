@@ -11,7 +11,7 @@ from FreeCAD import Vector
 
 from tridi.features import assert_single_solid, countersunk_hole, fuse_all, hex_prisms, rounded_rect, rounded_slot
 
-from .params import (NUT_ROOM, SINK, BarholderParams, blind_hole_depth, bolt_xs, bolt_y, bore_r, cradle_xs, end_bolt_x,
+from .params import (NUT_ROOM, NUT_SLIDE, SINK, BarholderParams, blind_hole_depth, bolt_xs, bolt_y, bore_r, cradle_xs, end_bolt_x,
                      flare_top, foot_y, hole_d, lip_angle, outer_r, rib_span, rib_top_y, strip_bottom, strip_top)
 
 FOOT_MARGIN = 3.0  # how far a bracket's foot reaches past its ribs
@@ -96,13 +96,24 @@ def _drain(p: BarholderParams, x: float) -> Part.Shape:
 
 
 def _bolt_cutters(p: BarholderParams, clearance: float) -> list[Part.Shape]:
-    """A blind hole, so no metal shows on the meat side, and a nut pocket opening toward the wall: a firm push fit
-    that holds the nut while you tighten from outside the box."""
+    """A hole through a ledge against the wall, and the nut's place past it. Tightening pulls the nut toward the bolt's
+    head, so the ledge is what clamps the strip to the wall.
+
+    With a slot, the nut drops in from the strip's top edge and comes to rest centred on the hole, its point in the
+    slot's V. The hole stops short of the front, so no metal shows on the meat side. With a front pocket, the nut
+    presses in from the meat side, a firm push fit."""
     out = []
     y, depth = bolt_y(p), blind_hole_depth(p)
+    height = p.nut_height + NUT_ROOM
     for x in bolt_xs(p):
         out.append(Part.makeCylinder(hole_d(p) / 2, depth + 1, Vector(x, y, -1)))
-        out.append(hex_prisms([(x, y)], p.nut_af + clearance, -1, p.nut_height + NUT_ROOM + 1, "y"))
+        if p.nut_entry == "top":
+            af = p.nut_af + NUT_SLIDE
+            out.append(hex_prisms([(x, y)], af, p.nut_ledge, height, "y"))
+            out.append(Part.makeBox(af, strip_top(p) + 1 - y, height, Vector(x - af / 2, y, p.nut_ledge)))
+        else:
+            out.append(hex_prisms([(x, y)], p.nut_af + clearance, p.nut_ledge,
+                                  p.strip_thickness - p.nut_ledge + 1, "y"))
     return out
 
 

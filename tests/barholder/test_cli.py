@@ -16,7 +16,7 @@ def test_default_build_writes_print_files_and_summary(tmp_path):
     assert r.returncode == 0, r.stderr
     for name in ("strip.stl", "strip.3mf", "backplate.stl", "backplate.3mf", "assembly.step"):
         assert (out / name).exists(), name
-    assert "M4×10" in (out / "summary.txt").read_text()
+    assert "M4×12" in (out / "summary.txt").read_text()
 
 
 def test_no_backplate_flag_drops_the_part(tmp_path):
@@ -40,3 +40,14 @@ def test_preset_for_a_single_test_cradle(tmp_path):
     r, out = run(tmp_path, "--preset", "test_fit")
     assert r.returncode == 0, r.stderr
     assert "count = 1" in (out / "summary.txt").read_text()
+
+
+def test_nut_entry_option_reaches_the_build(tmp_path):
+    r, out = run(tmp_path, "--nut-entry", "front")
+    assert r.returncode == 0, r.stderr
+    assert "nut_entry = front" in (out / "summary.txt").read_text()
+
+
+def test_unknown_nut_entry_is_refused(tmp_path):
+    r, _ = run(tmp_path, "--nut-entry", "side")
+    assert r.returncode == 2 and "top" in r.stderr

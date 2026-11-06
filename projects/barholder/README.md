@@ -11,6 +11,7 @@ pixi run build barholder --bar-d 25 --pitch 80 --count 2   # other bars, other s
 pixi run build barholder --cradle-depth 40 --bracket       # deep cradles with a support bracket underneath
 pixi run build barholder --wrap 180                        # a plain half circle, no snap
 pixi run build barholder --no-backplate                    # washers instead of a plate
+pixi run build barholder --nut-entry front                 # nut pockets open on the meat side instead of a slot
 pixi run build barholder --no-drain                        # closed cradle floor
 pixi run build barholder --help                            # every option
 ```
@@ -36,17 +37,19 @@ For one default strip:
 
 | Qty | Part |
 |---|---|
-| 4 | M4×10 countersunk hex-socket bolt (ISO 10642 / DIN 7991) |
+| 4 | M4×12 countersunk hex-socket bolt (ISO 10642 / DIN 7991) |
 | 4 | M4 hex nut (DIN 934: 7 mm across flats, 3.2 mm high) |
 
-Without the backplate it's M4×8 pan-head bolts with a washer outside the wall. Use stainless steel near food.
+Without the backplate it's M4×10 pan-head bolts with a washer outside the wall. Use stainless steel near food.
 
 ## Fitting
 
 1. Hold the backplate on the outside of the wall as a drilling template and mark the holes. Drill 4.5 mm. Keep both
    walls at the same height so the bars sit level, and check that the area is flat: no ribs or handles behind it.
-2. Press a nut into each pocket on the strip's back.
-3. Hold the strip inside and the plate outside, and tighten the bolts from outside the box.
+2. Drop a nut into each slot from the strip's top edge. It comes to rest centred on the hole. With
+   `--nut-entry front`, press it into the pocket from the front instead, with threadlock on the bolt.
+3. Hold the strip inside and the plate outside, and tighten the bolts from outside the box. Stop once it's snug: the
+   ledge behind the nut is only 2 mm of plastic.
 
 ## Printing
 
@@ -54,7 +57,7 @@ No supports, no brim. Each part is exported the way it should print, wall side d
 
 - **Strip:** the cradles stand up from the bed, so the layers follow the U and the snap arms flex along their layers
   rather than across them. Above the strip the arms rise on a 45° slope. Without it they'd be fused to the strip all
-  along their depth and far too stiff to snap near the wall. The only overhangs are short bridges over the nut pockets,
+  along their depth and far too stiff to snap near the wall. The only overhangs are short bridges over the nut slots,
   the bolt holes' ends and the drain.
 - **Backplate:** bolt seats up.
 
@@ -65,8 +68,11 @@ solid parts, so the real ones are lower. Meat touches the bars, not the holders.
 ## Details
 
 - **The seat stops at the strip's front**, so a bar's end never reaches the wall.
-- **Nothing metal shows inside.** The nuts sit between the strip and the wall, and the bolt holes are blind. A bolt
-  long enough to break through is refused, with the strip thickness it would need.
+- **The nuts pull on a plastic ledge**, so tightening clamps the strip to the wall.
+- **Nothing metal faces the meat by default.** The slots open only at the strip's top edge, and the bolt holes stop
+  short of the front. A nut can't drop out, since the slot is closed below it. A bolt long enough to break through is
+  refused, with the strip thickness it would need. `--nut-entry front` trades that for easier assembly: the nuts sit in
+  recesses open to the meat side.
 - **The drain** is a short gap in the floor against the stop, where drips collect, since a wall leaning outward tips
   the bar's wall end down. The ring stays closed in front of it.
 - **The bracket** is two ribs per cradle, either side of the drain, down to a foot on the wall. The foot pushes against

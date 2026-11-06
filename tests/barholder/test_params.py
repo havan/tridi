@@ -44,22 +44,22 @@ def test_mouth_follows_the_bar_and_its_fit():
 
 
 def test_bolt_runs_through_plate_wall_and_nut_with_its_tip_inside_the_strip():
-    assert bolt_length(BarholderParams()) == 10  # 4 + 2 + 3.2 + 1 - 0.5 = 9.7 -> stock 10
-    assert bolt_length(BarholderParams(box_wall=3)) == 12
+    assert bolt_length(BarholderParams()) == 12  # 4 + 2 + 2 + 3.2 + 1 - 0.5 = 11.7 -> stock 12
+    assert bolt_length(BarholderParams(box_wall=3)) == 16
 
 
 def test_without_a_backplate_the_bolt_only_spans_washer_wall_and_nut():
-    assert bolt_length(BarholderParams(backplate=False)) == 8  # 1 + 2 + 3.2 + 1 = 7.2 -> stock 8
+    assert bolt_length(BarholderParams(backplate=False)) == 10  # 1 + 2 + 2 + 3.2 + 1 = 9.2 -> stock 10
 
 
 def test_notes_list_the_hardware_for_a_full_strip():
     text = notes()
-    assert "4 × M4×10 countersunk" in text and "4 × M4 nuts" in text
+    assert "4 × M4×12 countersunk" in text and "4 × M4 nuts" in text
 
 
 def test_notes_ask_for_washers_when_the_backplate_is_off():
     text = notes(backplate=False)
-    assert "M4×8" in text and "washer" in text and "countersunk" not in text
+    assert "M4×10" in text and "washer" in text and "countersunk" not in text
 
 
 def test_notes_give_the_drilling_size_and_template():
@@ -68,7 +68,7 @@ def test_notes_give_the_drilling_size_and_template():
 
 def test_notes_give_the_bar_length_range_from_the_cradle_depth():
     text = notes(cradle_depth=25)
-    assert "14 mm" in text and "30 mm" in text  # 2 × 7 mm strip; 2 × (25 - 10) mm
+    assert "16 mm" in text and "30 mm" in text  # 2 × 8 mm strip; 2 × (25 - 10) mm
 
 
 def test_notes_say_how_much_the_snap_squeezes_the_bar():
@@ -96,7 +96,7 @@ def test_a_cradle_too_shallow_to_hold_the_bar_is_refused():
 
 def test_a_bolt_that_would_poke_through_the_strip_is_refused():
     with pytest.raises(ParamError, match="strip_thickness"):
-        effective(BarholderParams(box_wall=5))  # needs M4×16: tip 7.5 mm into a 7 mm strip
+        effective(BarholderParams(box_wall=5))  # needs M4×16: tip 7.5 mm into an 8 mm strip, leaving no cap
 
 
 def test_thick_walls_work_with_a_thicker_strip():
@@ -148,3 +148,24 @@ def test_a_drain_as_wide_as_the_bar_is_refused():
 
 def test_drain_limits_do_not_apply_when_the_drain_is_off():
     effective(BarholderParams(bar_d=8, drain_width=9, drain=False))
+
+
+def test_notes_say_how_the_nut_goes_in():
+    assert "top edge" in notes()
+    assert "front" in notes(nut_entry="front")
+
+
+def test_notes_warn_that_open_nuts_need_securing_near_food():
+    assert "threadlock" in notes(nut_entry="front")
+    assert "threadlock" not in notes()
+
+
+def test_an_open_front_pocket_only_has_to_hide_the_bolt_tip():
+    effective(BarholderParams(strip_thickness=7, nut_entry="front"))  # tip 6.5 + 0.5, no cap needed
+    with pytest.raises(ParamError, match="strip_thickness"):
+        effective(BarholderParams(strip_thickness=7))  # the slot needs a 1 mm cap as well
+
+
+def test_a_nut_wider_than_the_head_still_clears_the_cradle():
+    wide = BarholderParams(nut_af=10)
+    assert bolt_xs(wide)[-1] > bolt_xs(BarholderParams())[-1]

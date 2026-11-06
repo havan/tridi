@@ -12,8 +12,9 @@ from tridi.params import ParamError, param
 
 SINK = 0.5  # how far a bolt head's seat sits below the plate's surface
 NUT_ROOM = 0.2  # extra height for a nut in its pocket
+NUT_SLIDE = 0.4  # how much wider than the nut a slot is, for a sliding fit
 MIN_LAND = 1.0  # plastic left under a countersink
-BOLT_CAP = 1.0  # plastic left between a bolt's tip hole and the strip's front
+BOLT_CAP = 0.5  # plastic left between a slot's bolt hole and the strip's front: it only covers the tip
 TIP_ROOM = 0.5  # room past a bolt's tip in its blind hole
 WASHER = 1.0  # thickness of a washer under a pan head, when there's no backplate
 HEAD_MARGIN = 1.0  # plastic between a bolt head's seat and the cradle's outside, along the strip
@@ -39,7 +40,7 @@ class BarholderParams:
     cradle_wall: float = param(3, "cradle wall thickness, mm; thinner makes a softer snap", min=1.6, max=8)
     # strip
     strip_height: float = param(16, "height of the strip, mm", min=8, max=60)
-    strip_thickness: float = param(7, "thickness of the strip against the wall, mm", min=3, max=20)
+    strip_thickness: float = param(8, "thickness of the strip against the wall, mm", min=3, max=20)
     strip_drop: float = param(3, "how far the strip's top edge sits below the bar's centre, mm; lower makes a softer "
                               "snap", min=0, max=30)
     # box
@@ -56,6 +57,9 @@ class BarholderParams:
     drain_width: float = param(4, "drain width, mm", min=1, max=20)
     drain_length: float = param(6, "drain length along the bar, mm", min=1, max=60)
     # hardware
+    nut_entry: str = param("top", "how the nuts go in: top is a slot from the strip's top edge with the meat side "
+                           "closed, front is a pocket open toward the meat", choices=("top", "front"))
+    nut_ledge: float = param(2, "plastic between a nut and the wall, which the bolt clamps, mm", min=1.2, max=10)
     bolt_d: float = param(4, "bolt diameter, mm", min=2, max=6)
     head_d: float = param(8, "countersunk bolt head diameter, mm", min=4, max=14)
     nut_af: float = param(7, "nut across its flats, mm", min=3, max=12)
@@ -100,8 +104,8 @@ def cradle_xs(p: BarholderParams) -> list[float]:
 
 
 def _head_clearance(p: BarholderParams) -> float:
-    """From a cradle's outside to the nearest bolt, along the strip."""
-    return p.head_d / 2 + 0.2 + HEAD_MARGIN
+    """From a cradle's outside to the nearest bolt, along the strip: past the bolt head and the nut's slot."""
+    return max(p.head_d / 2 + 0.2, (p.nut_af + NUT_SLIDE) / 2) + HEAD_MARGIN
 
 
 def end_bolt_x(p: BarholderParams) -> float:
@@ -153,9 +157,10 @@ def _stock(length: float) -> int:
 
 def bolt_length(p: BarholderParams) -> int:
     """A countersunk bolt's length includes its head, a pan head's doesn't. The tip should clear the nut by 1 mm."""
+    clamped = p.box_wall + p.nut_ledge + p.nut_height + 1
     if p.backplate:
-        return _stock(p.plate_thickness + p.box_wall + p.nut_height + 1 - SINK)
-    return _stock(WASHER + p.box_wall + p.nut_height + 1)
+        return _stock(p.plate_thickness + clamped - SINK)
+    return _stock(WASHER + clamped)
 
 
 def bolt_tip_z(p: BarholderParams) -> float:
@@ -194,14 +199,15 @@ def _check_hardware(p: BarholderParams) -> None:
     if p.strip_height < needed:
         raise ParamError(f"strip_height ({p.strip_height:g}) is too narrow for the nuts and bolt heads; "
                          f"use at least {needed:g}")
-    thick = bolt_tip_z(p) + TIP_ROOM + BOLT_CAP
-    if p.strip_thickness < thick:
-        raise ParamError(f"strip_thickness ({p.strip_thickness:g}) is too thin to hide the nut and an "
-                         f"M{p.bolt_d:g}×{bolt_length(p)} bolt's tip; use at least {thick:g}")
     seat = SINK + (p.head_d + 0.4 - hole_d(p)) / 2 + MIN_LAND
     if p.backplate and p.plate_thickness < seat:
         raise ParamError(f"plate_thickness ({p.plate_thickness:g}) must be at least {seat:g} mm to hold the "
                          f"countersink")
+    cap = BOLT_CAP if p.nut_entry == "top" else 0
+    thick = bolt_tip_z(p) + TIP_ROOM + cap
+    if p.strip_thickness < thick:
+        raise ParamError(f"strip_thickness ({p.strip_thickness:g}) is too thin to hide an "
+                         f"M{p.bolt_d:g}×{bolt_length(p)} bolt's tip; use at least {thick:g}")
 
 
 def _check_drain(p: BarholderParams) -> None:
@@ -246,7 +252,12 @@ def effective(p: BarholderParams) -> tuple[BarholderParams, list[str]]:
         drill = "the backplate is the template"
     else:
         bolts = f"{n} × {m}×{bolt_length(p)} pan-head bolts, {n} × {m} nuts, {n} × {m} washers on the outside"
-        drill = "use the strip's nut pockets as the template"
+        drill = "use the strip's bolt holes as the template"
+    if p.nut_entry == "top":
+        nuts = "nuts: drop one into each slot from the strip's top edge, where it centres itself on the hole"
+    else:
+        nuts = ("nuts: press one into each pocket from the front. They face the meat, so use stainless steel and "
+                "threadlock so one can't work loose")
     spacing = ", ".join(f"{x:g}" for x in bolt_xs(p))
     notes = [
         f"sizes: strip {overall_length(p):g} mm long, {p.count} cradles {p.pitch:g} mm apart, standing "
@@ -254,6 +265,7 @@ def effective(p: BarholderParams) -> tuple[BarholderParams, list[str]]:
         f"hardware for one strip: {bolts}. Print one set for each wall",
         f"wall: drill {hole_d(p):g} mm holes at {spacing} mm from the strip's middle; {drill}, and drill both walls "
         f"at the same height so the bars sit level",
+        nuts,
         f"bar length: at most the distance between the walls minus {2 * p.strip_thickness:g} mm, at least that "
         f"distance minus {2 * (p.cradle_depth - MIN_SEAT):g} mm (keeps {MIN_SEAT:g} mm in each cradle)",
         _snap_note(p),
