@@ -250,11 +250,45 @@ def effective(p: FlangeParams) -> tuple[FlangeParams, list[str]]:
     p = _resolve_auto(p)
     notes = _settle(p, _problems(p))
     width, height = layout.outer_size(p)
-    notes.append(f"sizes: {width:g} × {height:g} mm outside, {_opening_text(p)} opening")
+    notes += [f"sizes: {width:g} × {height:g} mm outside, {_opening_text(p)} opening", _wall_note(p),
+              _hardware_note(p, width, height), _air_note(p)]
     if p.mesh in ("grid", "honeycomb") and p.mesh_hole > FLY_HOLE:
         notes.append(f"mesh: {p.mesh_hole:g} mm holes are over the estimated {FLY_HOLE:g} mm limit, so flies may get "
                      f"through")
     return p, notes
+
+
+def _wall_note(p: FlangeParams) -> str:
+    x, y = wall_hole(p)
+    hole = f"a {x:g} mm hole" if p.shape == "round" else f"a {x:g} × {y:g} mm slot with fully rounded ends"
+    if p.fixing == "centre_bolt":
+        return f"wall: cut {hole}; no bolt holes are needed"
+    return f"wall: cut {hole} and drill {bolt_count(p)} × {hole_d(p):g} mm holes; the outer piece is the template"
+
+
+def _hardware_note(p: FlangeParams, width: float, height: float) -> str:
+    n, m = bolt_count(p), f"M{p.bolt_d:g}"
+    items = [f"{n} × {m}×{bolt_length(p)} countersunk hex-socket bolts (ISO 10642 / DIN 7991)", f"{n} × {m} nuts"]
+    if p.fixing == "one_piece":
+        items.append(f"{n} × {m} washers")
+    if p.mesh == "wire":
+        items.append(f"{width - 2:g} × {height - 2:g} mm of wire mesh")
+    return f"hardware: {', '.join(items)}"
+
+
+def _air_note(p: FlangeParams) -> str:
+    opening = layout.opening_area(p)
+    parts = [f"air: {opening:.0f} mm² opening"]
+    if p.fixing == "centre_bolt":
+        parts.append(f"{layout.area_after_bars(p):.0f} mm² after hubs and bars")
+    if p.mesh in ("grid", "honeycomb"):
+        area = layout.open_area(p)
+        parts.append(f"{area:.0f} mm² through the mesh ({area / opening:.0%} of the opening)")
+    elif p.mesh == "wire":
+        parts.append("fly screen is typically 60–70% open")
+    else:
+        parts.append("what's left depends on the infill you choose")
+    return ", ".join(parts)
 
 
 def _opening_text(p: FlangeParams) -> str:

@@ -145,3 +145,32 @@ def test_forced_silly_counts_become_notes_not_crashes(kw):
 def test_forced_no_cells_still_resolves():
     p = resolved(shape="slot", mesh="grid", mesh_hole=6, slot_width=10, slot_length=30, force=True)
     assert mesh_cells(p) == []
+
+
+def _note(key, **kw):
+    return next(n for n in notes(**kw) if n.startswith(key))
+
+
+def test_notes_list_what_to_cut():
+    wall = _note("wall:")
+    assert "53.6 mm" in wall and "4 × 4.5 mm" in wall
+    assert "193.6 × 24.6 mm" in _note("wall:", shape="slot")
+    assert "8 × 4.5 mm" in _note("wall:", shape="slot")
+    assert "no bolt holes" in _note("wall:", fixing="centre_bolt")
+
+
+def test_notes_list_what_to_buy():
+    buy = _note("hardware:")
+    assert "4 × M4×12" in buy and "4 × M4 nuts" in buy and "washers" not in buy and "76 × 76 mm" in buy
+    assert "4 × M4 washers" in _note("hardware:", fixing="one_piece")
+    assert "3 × M4×12" in _note("hardware:", shape="slot", fixing="centre_bolt")
+    assert "216 × 47 mm" in _note("hardware:", shape="slot")
+    assert "wire mesh" not in _note("hardware:", mesh="grid")
+
+
+def test_notes_report_air():
+    air = _note("air:", mesh="grid")
+    assert "1963 mm²" in air and "731 mm²" in air and "37%" in air
+    assert "1234 mm²" in _note("air:", fixing="centre_bolt")
+    assert "60–70%" in _note("air:")
+    assert "infill" in _note("air:", mesh="slicer")

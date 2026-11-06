@@ -1,0 +1,26 @@
+# Example presets: pixi run build flange --preset <name>
+# Put your own in local.toml at the repo root, as [flange.<name>] tables.
+
+[round_3]
+rim_bolts = 3
+
+[round_centre]
+fixing = "centre_bolt"
+
+[round_grid]
+mesh = "grid"
+
+[slot]
+shape = "slot"
+
+[slot_centre]
+shape = "slot"
+fixing = "centre_bolt"
+
+[slot_honeycomb]
+shape = "slot"
+mesh = "honeycomb"
+
+[slot_slicer]
+shape = "slot"
+mesh = "slicer"

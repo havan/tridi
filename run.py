@@ -50,7 +50,8 @@ def build(argv: list[str]) -> int:
     variant = variant_name(args.preset, overrides)
     parts, notes = project.build(params, printer)
     out = args.out or ROOT / "out" / known.project / variant
-    summary = export(parts, out, title=variant, params=dataclasses.asdict(params), printer=printer, notes=notes)
+    summary = export(parts, out, title=variant, params=dataclasses.asdict(params), printer=printer, notes=notes,
+                     force=getattr(params, "force", False))
     print(summary.read_text(), end="")
     print(f"\nwrote {out}")
     return 0
