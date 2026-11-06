@@ -46,8 +46,8 @@ softens at around 55–60 °C.
 1. Cut the hole and feed the wire through.
 2. Lay the wire in one body half and close the other over it, with the keys in the disc in their sockets.
 3. Push the closed body through the hole from outside.
-4. Inside, slide `nut_a`'s tabs into `nut_b`'s sockets around the wire, just past the end of the body, with the flat
-   wall faces level. Join them from the wall face side, until the tabs stop.
+4. Inside, join the nut around the wire, just past the end of the body: slide `nut_a`'s tabs into the open ends of
+   `nut_b`'s sockets, on its flat wall face, until they stop. The two wall faces should end up level.
 5. Screw the nut on by hand, wall face first, holding the disc so the body doesn't turn and twist the wire. Stop when
    it's tight against the wall.
 

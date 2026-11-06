@@ -24,6 +24,8 @@ RIB_TIP = 0.4
 KEY_LENGTH = 1.6
 KEY_FIT = 0.15
 BIG = 200.0
+SOCKET_ROOF = 1.0
+TAB_STOP_GAP = 0.05  # small, because the tab stopping against the roof is what lines the thread up
 CORE_INSET = 0.2  # the plain core, under the thread's root
 CORE_OVERLAP = 0.2  # how far the thread's tube reaches into the core
 
@@ -224,10 +226,10 @@ def build_nut(p: GrommetParams, side: str) -> Part.Shape:
     whole = ring.cut(_scallops(p.nut_d, z0, z1, (90, 270))).cut(lead).cut(bore)
     if side == "a":
         piece = whole.common(Part.makeBox(BIG, 2 * BIG, 2 * BIG, V(0, -BIG, -BIG)))
-        piece = piece.fuse(Part.makeCompound([_joint(p, s, 0, z0, z1 - 1.2) for s in (1, -1)]))
+        piece = piece.fuse(Part.makeCompound([_joint(p, s, 0, z0, z1 - SOCKET_ROOF - TAB_STOP_GAP) for s in (1, -1)]))
     else:
         piece = whole.common(Part.makeBox(BIG, 2 * BIG, 2 * BIG, V(-BIG, -BIG, -BIG)))
-        sockets = [_joint(p, s, JOINT_FIT, z0 - 0.1, z1 - 1.0) for s in (1, -1)]
+        sockets = [_joint(p, s, JOINT_FIT, z0 - 0.1, z1 - SOCKET_ROOF) for s in (1, -1)]
         relief = [_joint(p, s, 2 * JOINT_FIT, z0 - 0.1, z0 + 0.3) for s in (1, -1)]  # against elephant's foot
         piece = piece.cut(Part.makeCompound([*sockets, *relief]))
     return assert_single_solid(piece, f"nut_{side}")

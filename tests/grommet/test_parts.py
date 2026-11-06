@@ -8,7 +8,7 @@ import Part
 from FreeCAD import Vector as V
 
 from projects.grommet import build
-from projects.grommet.params import GrommetParams, effective, grip_span, nut_z0
+from projects.grommet.params import GrommetParams, effective, grip_span, joint_centre_r, nut_z0
 from projects.grommet.parts import build_body, build_nut
 from tridi.export import to_bed
 from tridi.printers import get_printer, load_printers
@@ -103,3 +103,11 @@ def _overhang_area(shape):
 def test_no_large_overhangs(parts, name, allowed):
     part = parts[name]
     assert _overhang_area(to_bed(part.shape, part.rotation)) < allowed
+
+
+def test_nut_tab_stops_with_the_thread_lined_up(parts):
+    p = resolved()
+    line = Part.makeLine(V(-1.6, joint_centre_r(p), 0), V(-1.6, joint_centre_r(p), 20))
+    tab_top = line.common(parts["nut_a"].shape).BoundBox.ZMax
+    roof = line.common(parts["nut_b"].shape).BoundBox.ZMin
+    assert 0 <= roof - tab_top < 0.1
