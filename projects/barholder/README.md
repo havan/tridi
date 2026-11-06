@@ -1,0 +1,110 @@
+# Bar holder
+
+Snap-in holders for the bars in a drying box, such as a biltong box made from a plastic storage box. A strip of
+U-shaped cradles bolts to the inside of the wall, with a backplate on the outside to spread the load over the thin
+plastic. Bars press in from above and pull out by hand for cleaning. Print one set for each of two opposite walls.
+
+**Check your box's walls first.** Plastic storage boxes usually have walls that lean outward going up, so they stack.
+The default assumes a straight wall. If yours leans, set `--wall-angle` or the bars will sit tilted in their cradles.
+
+```
+pixi run build barholder --wall-angle 3.9                  # a wall leaning outward 3.9°: bars still sit level
+pixi run build barholder                                   # 3 cradles for 20 mm bars, 70 mm apart, on a 2 mm wall
+pixi run build barholder --preset test_fit                 # one cradle: try the snap on your wood first
+pixi run build barholder --bar-d 25 --pitch 80 --count 2   # other bars, other spacing
+pixi run build barholder --cradle-depth 40 --bracket       # deep cradles with a support bracket underneath
+pixi run build barholder --wrap 180                        # a plain half circle, no snap
+pixi run build barholder --arm-slope 60                    # a steeper cut behind the arms, easier to print
+pixi run build barholder --arm-slope 0 --wrap 215          # no cut: arms straight down to the wall, lighter snap
+pixi run build barholder --no-backplate                    # washers instead of a plate
+pixi run build barholder --nut-entry front                 # nut pockets open on the meat side instead of a slot
+pixi run build barholder --no-drain                        # closed cradle floor
+pixi run build barholder --no-through-cut                  # a stop in the seat that keeps the bar's end off the wall
+pixi run build barholder --help                            # every option
+```
+
+Output goes to `out/barholder/<variant>/`: `strip` and `backplate` as STL and 3MF, already rotated for printing,
+plus `assembly.step`, an `.FCStd` and `summary.txt`. The summary lists the bolts to buy, where to drill and which bar
+lengths fit.
+
+## Measuring the wall's lean
+
+The lean of one wall is `atan(offset / height)`. Stand the box on a flat surface and hold something square against the
+wall's foot: the height is how far up you measure, and the offset is how far that one wall has moved outward by then.
+For example, 25 mm of offset over 370 mm of height is 3.9°. Comparing the box's top and bottom widths gives you both
+walls added together, so halve that difference first.
+
+The cradles tilt against the strip by this angle, so the strip stays flat on the wall and the bar stays level. The
+strip's bolt holes, the backplate and the way it prints all stay the same. Fit it with its top edge up, as always, and
+drill both walls at the same height.
+
+## Sizing the fit
+
+- **`--bar-d`:** measure your bars with calipers, since wood varies and swells. `--bar-fit` is the gap around the bar
+  once it's seated.
+- **`--wrap`:** how far the cradle wraps round the bar. At 180° the bar lifts straight out, and at the default 225°
+  the mouth is about 1 mm narrower than the bar. The snap's stiffness is a calculated estimate, not a measured one,
+  so print `--preset test_fit` first. If it's too stiff, lower `--wrap`, `--cradle-wall` or both.
+- **`--cradle-depth`:** deeper cradles forgive shorter bars, and storage box walls usually lean outward, so the gap
+  between them grows with height. The summary gives the range of bar lengths that fit.
+- **`--arm-slope`:** the cut behind the arms, in degrees from the wall, which keeps them flexible near the wall.
+  Slicers often flag the default 45° as needing supports, so go steeper if yours does. 60° leaves about 5 mm of lip at
+  each end of a default 25 mm cradle, and if the slope leaves too little lip the build asks for a deeper cradle. At 0
+  there's no cut and nothing to support, but the arms are rooted to the strip right up to the wall, so the snap is much
+  stiffer: lower `--wrap` and try `--preset test_fit`, or use `--wrap 180` for no snap at all.
+- **`--through-cut`:** on by default, the seat runs on through the strip to the wall. That saves about 0.85 cm³ a cradle
+  by default, and a bar can use the full distance between the walls. With nothing to stop it, a bar can also slide
+  until it touches a wall, and a short one could then come close to leaving the cradle at the far end. The summary gives
+  the length that stays safe. `--no-through-cut` keeps the end of the bar off the wall with a stop.
+- **`--count`:** a strip longer than your printer's bed is refused. Mount several strips side by side on a long wall.
+
+## What to buy
+
+For one default strip:
+
+| Qty | Part |
+|---|---|
+| 4 | M4×12 countersunk hex-socket bolt (ISO 10642 / DIN 7991) |
+| 4 | M4 hex nut (DIN 934: 7 mm across flats, 3.2 mm high) |
+
+Without the backplate it's M4×10 pan-head bolts with a washer outside the wall. Use stainless steel near food.
+
+## Fitting
+
+1. Hold the backplate on the outside of the wall as a drilling template and mark the holes. Drill 4.5 mm. Keep both
+   walls at the same height so the bars sit level, and check that the area is flat: no ribs or handles behind it.
+2. Drop a nut into each slot from the strip's top edge. It comes to rest centred on the hole. With
+   `--nut-entry front`, press it into the pocket from the front instead, with threadlock on the bolt.
+3. Hold the strip inside and the plate outside, and tighten the bolts from outside the box. Stop once it's snug: the
+   ledge behind the nut is only 2 mm of plastic.
+
+## Printing
+
+No supports, no brim. Each part is exported the way it should print, wall side down:
+
+- **Strip:** the cradles stand up from the bed, so the layers follow the U and the snap arms flex along their layers
+  rather than across them. Above the strip the arms rise on a slope, 45° by default. Without it they'd be fused to the strip all
+  along their depth and far too stiff to snap near the wall. The only overhangs are short bridges over the nut slots,
+  the bolt holes' ends and the drain.
+- **Backplate:** bolt seats up.
+
+Suggested settings: PETG, or ASA if there's a heat source in the box, since PLA softens at around 55–60 °C and doesn't
+like sitting under load in the warm. Use a 0.2 mm layer height, 4 walls and 20% infill. The summary's weights are for
+solid parts, so the real ones are lower. Meat touches the bars, not the holders.
+
+## Details
+
+- **The seat runs through the strip**, which carries on under it, with a bolt on either side of each cradle. If the bar
+  is wide enough to cut right through the strip's height, the cradle's own wall joins the two sides.
+- **The nuts pull on a plastic ledge**, so tightening clamps the strip to the wall.
+- **Nothing metal faces the meat by default.** The slots open only at the strip's top edge, and the bolt holes stop
+  short of the front. A nut can't drop out, since the slot is closed below it. A bolt long enough to break through is
+  refused, with the strip thickness it would need. `--nut-entry front` trades that for easier assembly: the nuts sit in
+  recesses open to the meat side.
+- **The drain** is a short gap in the floor just past the strip's front. The ring stays closed in front of it. With the
+  through cut there's a strip's thickness of floor behind it, ending at the wall. That floor is level if `--wall-angle`
+  matches the wall. If it doesn't, the floor runs down toward the wall and a shallow puddle can sit there: about 0.5 mm
+  deep on a 3.9° wall with the default strip.
+- **The bracket** is two ribs per cradle, either side of the drain, down to a foot on the wall. The foot pushes against
+  the wall, so it needs no bolt of its own, and the backplate grows to back it up. You won't need it for 1–2 kg on a
+  25 mm cradle. It's there for deep cradles.

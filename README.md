@@ -10,6 +10,7 @@ Every design is Python code: pick the options and sizes you need and get print-r
 | [`shelf`](projects/shelf/) | Small wall shelf for phones, controllers and chargers, with cable management |
 | [`fanbox`](projects/fanbox/) | Fan socket, duct and fly-mesh frame for a drying box lid, such as a biltong box |
 | [`flange`](projects/flange/) | Air vent flange for a drying box's side wall, round or long slot, with wire or printed mesh |
+| [`barholder`](projects/barholder/) | Snap-in holders for the bars in a drying box, bolted through its thin wall to a backplate |
 
 ## Quick start
 
