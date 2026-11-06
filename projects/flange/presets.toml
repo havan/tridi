@@ -10,6 +10,11 @@ fixing = "centre_bolt"
 [round_grid]
 mesh = "grid"
 
+[round_grid_wire]
+mesh = "grid"
+mesh_to_edge = true
+add_wire = true
+
 [slot]
 shape = "slot"
 

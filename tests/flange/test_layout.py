@@ -2,7 +2,8 @@ import math
 
 import pytest
 
-from projects.flange.layout import (area_after_bars, bar_segments, cell_circumradius, hub_xy, mesh_cells, open_area,
+from projects.flange.layout import (MIN_CLIPPED, area_after_bars, bar_segments, cell_circumradius, clipped_cells,
+                                    clipped_share, hub_xy, mesh_cells, open_area,
                                     opening_area, outer_size, rim_bolt_xy, spine, spine_distance)
 from projects.flange.params import FlangeParams, effective
 
@@ -139,3 +140,72 @@ def test_cells_keep_a_rib_from_every_edge(shape, mesh):
             assert math.hypot(x - hx, y - hy) >= p.hub_d / 2 + margin - 1e-9
         for seg in bar_segments(p):
             assert _segment_distance(x, y, seg) >= p.bar_width / 2 + margin - 1e-9
+
+
+# ---- a mesh that runs to the edge: holes clipped there instead of left out
+
+
+LATTICE_SHARE = 1.5 ** 2 / 2.3 ** 2  # one 1.5 mm hole per 2.3 mm square of lattice, the same for hexagons: 42.5%
+
+
+def test_holes_stay_whole_unless_asked():
+    assert clipped_cells(resolved(mesh="grid")) == []
+
+
+@pytest.mark.parametrize("mesh", ["wire", "slicer"])
+def test_only_a_printed_mesh_has_clipped_holes(mesh):
+    assert clipped_cells(resolved(mesh=mesh)) == []
+
+
+@pytest.mark.parametrize("mesh", ["grid", "honeycomb"])
+def test_to_the_edge_the_open_area_is_the_lattices_own_share(mesh):
+    # no solid band left round the edge: 42.5% of the 1963.5 mm² opening, less the slivers left out
+    p = resolved(mesh=mesh, mesh_to_edge=True)
+    assert open_area(p) == pytest.approx(LATTICE_SHARE * 1963.5, rel=0.03)
+    assert open_area(p) > open_area(resolved(mesh=mesh)) * 1.1
+
+
+@pytest.mark.parametrize("kw", [dict(fixing="centre_bolt"), dict(shape="slot"),
+                                dict(shape="slot", fixing="centre_bolt")])
+def test_to_the_edge_it_also_reaches_the_hubs_and_bars(kw):
+    p = resolved(mesh="grid", mesh_to_edge=True, **kw)
+    assert open_area(p) == pytest.approx(LATTICE_SHARE * area_after_bars(p), rel=0.05)
+
+
+def test_clipped_holes_all_cross_the_edge():
+    p = resolved(mesh="grid", mesh_to_edge=True)
+    R = cell_circumradius(p)
+    assert clipped_cells(p)
+    for x, y in clipped_cells(p):
+        assert math.hypot(x, y) + R > 25
+        assert math.hypot(x, y) - R < 25
+
+
+def test_to_the_edge_whole_holes_need_no_rib_beside_the_edge():
+    # the rim is solid, so a hole there needs no rib of its own beside it
+    p = resolved(mesh="grid", mesh_to_edge=True)
+    assert all(math.hypot(x, y) + cell_circumradius(p) <= 25 for x, y in mesh_cells(p))
+    assert len(mesh_cells(p)) > len(mesh_cells(resolved(mesh="grid")))
+
+
+def test_a_clipped_hole_keeps_what_share_is_left_of_it():
+    p = resolved(mesh="grid", mesh_to_edge=True)
+    assert clipped_share(p, 0, 0) == pytest.approx(1)
+    assert clipped_share(p, 0, 30) == 0
+    # a hole with its centre on a straight edge would lose half. The slot's edge is straight at y = 10.5
+    slot = resolved(mesh="grid", mesh_to_edge=True, shape="slot")
+    assert clipped_share(slot, 0, 10.5) == pytest.approx(0.5, abs=0.05)
+
+
+def test_slivers_are_left_out():
+    p = resolved(mesh="grid", mesh_to_edge=True)
+    assert all(clipped_share(p, x, y) >= MIN_CLIPPED for x, y in clipped_cells(p))
+    # the hole at 8 lattice steps along each axis is at y = 8 × 2.3 × √2 = 26.02, and only 0.04 mm of its corner gets in
+    assert (0, 26.02) not in [(round(x, 2), round(y, 2)) for x, y in clipped_cells(p)]
+
+
+def test_clipped_holes_stay_out_of_hubs_and_bars():
+    p = resolved(mesh="grid", mesh_to_edge=True, fixing="centre_bolt")
+    assert clipped_share(p, 0, 0) == 0  # inside the hub
+    assert clipped_share(p, 12, 0) == 0  # inside a bar
+    assert clipped_cells(p)

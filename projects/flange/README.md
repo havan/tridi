@@ -9,6 +9,8 @@ pixi run build flange --shape slot                      # long slot, 8 bolts
 pixi run build flange --fixing centre_bolt              # no bolt holes in the wall
 pixi run build flange --mesh grid                       # printed mesh, no wire needed
 pixi run build flange --shape slot --mesh honeycomb --mesh-hole 1.2
+pixi run build flange --mesh grid --mesh-to-edge        # ribs reach the edges, with holes clipped there
+pixi run build flange --mesh grid --mesh-to-edge --add-wire   # the same, backing wire mesh
 pixi run build flange --preset slot_centre
 pixi run build flange --help                            # every option
 ```
@@ -87,11 +89,31 @@ under the rim. If you use tape, set `--seal-thickness` so the bolt lengths allow
   it leaves a 0.5 mm gap between the hubs, with any wire mesh in place. Make it smaller and the bolt can squeeze the pieces harder. `0` leaves it out.
 - `--rim-bolts`, `--hubs`, `--bars`, `--hub-d`, `--bar-width`, `--rim`: fewer bars or narrower ones let more air through.
 - `--mesh-hole`, `--mesh-rib`, `--mesh-thickness`, `--mesh-angle`: the printed mesh.
+- `--mesh-to-edge`: runs a printed mesh right up to the opening's edge, the hubs and the bars, clipping the holes there.
+  See below.
+- `--add-wire`: clamps wire mesh behind a printed or slicer mesh. See below.
+
+## A printed mesh to the edge
+
+By default every printed hole is whole, which leaves a solid band around them, several mm wide in places.
+`--mesh-to-edge` fills that band: holes that cross an edge are clipped at it, so the ribs reach the rim, hubs and bars.
+A clipped hole with under a fifth of itself left stays solid, since it's too small to print well.
+
+## Wire mesh behind a printed mesh
+
+`--add-wire` is for wire mesh clamped between the printed mesh and the wall. With `--mesh-to-edge` too, the printed ribs
+support it right up to the edge. The wire goes on the summary's shopping list, and the bolt lengths allow for
+`--wire-thickness`, which is 0.5 mm by default.
+
+No pocket is printed for the wire, so the outer piece prints the same either way. Clamped on top of the wire, it just
+sits that much further off the wall, as it does with `--mesh wire`. Only bolt lengths and `assembly.step` follow, and
+the hubs on `centre_bolt` keep their 0.5 mm gap. Trim the wire to the outer piece's outline. How well this holds wire
+hasn't been tried on a real print yet.
 
 ## Air
 
-Printed mesh blocks a lot of air. Holes are always whole, never clipped at an edge, so the plastic beside each hole is
-at least one rib wide. With 1.5 mm holes and 0.8 mm ribs:
+Printed mesh blocks a lot of air. Unless it runs to the edge, the plastic beside each hole is at least one rib wide.
+With 1.5 mm holes and 0.8 mm ribs:
 
 | Variant, with printed grid | Open area | Flanges to match a 140 mm fan's full 13,000 mm² |
 |---|---|---|
@@ -99,6 +121,9 @@ at least one rib wide. With 1.5 mm holes and 0.8 mm ribs:
 | Slot, rim bolts | about 1,390 mm² (36%) | about 10 |
 | Slot, centre bolt | about 1,040 mm² (27%) | about 13 |
 | Round, centre bolt, four bars | about 330 mm² (17%) | about 39 |
+
+`--mesh-to-edge` opens these up to about 830 mm² (42%), 1,660 mm² (43%), 1,380 mm² (35%) and 510 mm² (26%), in the same
+order. Wire mesh behind any of them takes more: fly screen is typically 60–70% open.
 
 A drying box doesn't have to match the fan's full capacity, so treat this as a comparison. For more air, use wire mesh,
 a larger opening or fewer bars.

@@ -4,13 +4,14 @@ import pytest
 
 import tridi  # noqa: F401
 import Mesh
+import MeshPart
 import Part
 from FreeCAD import Vector as V
 
 from projects.flange import build
 from projects.flange.layout import area_after_bars, mesh_cells, open_area, opening_area
 from projects.flange.params import FlangeParams, effective
-from projects.flange.parts import build_mesh_zone, build_outer
+from projects.flange.parts import build_inner, build_mesh_zone, build_outer
 from tridi.export import export
 from tridi.features import GeometryError
 from tests.flange.test_params import REFUSED
@@ -142,6 +143,120 @@ def test_zone_lines_up_on_the_bed(tmp_path):
 def test_forced_mesh_with_no_holes_still_builds():
     p = resolved(shape="slot", mesh="grid", mesh_hole=6, slot_width=10, slot_length=30, force=True)
     assert build_outer(p, CLEAR).isValid()
+
+
+# ---- a mesh that runs to the edge
+
+
+@pytest.fixture(scope="module")
+def to_edge():
+    return build_outer(resolved(mesh="grid", mesh_to_edge=True), CLEAR)
+
+
+def lattice_point(u, v):
+    """A point in the default grid's own axes, which sit at 45°."""
+    return (u - v) * math.sqrt(0.5), (u + v) * math.sqrt(0.5)
+
+
+def test_a_clipped_hole_opens_right_up_to_the_edge(to_edge, grid):
+    # the hole 11 lattice steps out, at v = 25.3, spans v = 24.55 to 26.05: the edge at 25 clips it
+    x, y = lattice_point(0, 24.9)
+    assert not solid_at(to_edge, x, y, 0.6)
+    assert solid_at(grid, x, y, 0.6)
+
+
+def test_the_rim_is_solid_just_past_a_clipped_hole(to_edge):
+    x, y = lattice_point(0, 25.1)
+    assert solid_at(to_edge, x, y, 0.6)
+
+
+def test_the_ribs_reach_the_edge(to_edge):
+    # the rib between holes runs along u = 1.15
+    x, y = lattice_point(1.15, math.sqrt(24.9 ** 2 - 1.15 ** 2))
+    assert solid_at(to_edge, x, y, 0.6)
+
+
+def test_a_clipped_hole_is_only_in_the_mesh_layer_so_the_rim_stays_whole(to_edge):
+    x, y = lattice_point(0, 25.1)
+    assert solid_at(to_edge, x, y, 3)
+
+
+def test_the_volume_taken_out_matches_the_open_area(to_edge):
+    plain = build_outer(resolved(mesh="slicer"), CLEAR)
+    p = resolved(mesh="grid", mesh_to_edge=True)
+    assert plain.Volume - to_edge.Volume == pytest.approx(open_area(p) * 1.2, rel=0.01)
+
+
+def test_clipped_holes_leave_the_bars_and_hubs_whole():
+    piece = build_outer(resolved(mesh="grid", fixing="centre_bolt", mesh_to_edge=True), CLEAR)
+    assert solid_at(piece, 12, 3.9, 0.6) and solid_at(piece, 12, 3.9, 3)  # a bar, 8 mm wide
+    assert solid_at(piece, 6.9, 0, 0.6) and solid_at(piece, 6.9, 0, 3)  # the hub, 14 mm wide
+
+
+@pytest.mark.parametrize("kw", [
+    dict(mesh="grid"), dict(mesh="honeycomb"), dict(mesh="grid", fixing="centre_bolt"),
+    dict(mesh="honeycomb", fixing="centre_bolt"), dict(mesh="grid", fixing="one_piece"),
+    dict(mesh="grid", shape="slot"), dict(mesh="honeycomb", shape="slot", fixing="centre_bolt"),
+    dict(mesh="grid", mesh_angle=0), dict(mesh="grid", mesh_angle=17), dict(mesh="honeycomb", mesh_angle=30),
+    dict(mesh="grid", mesh_hole=4, mesh_rib=1.5),
+    dict(mesh="grid", mesh_hole=6, mesh_rib=1, fixing="centre_bolt", force=True),
+    dict(mesh="grid", mesh_thickness=4), dict(mesh="grid", bed_chamfer=0), dict(mesh="grid", seal_thickness=2),
+])
+def test_a_mesh_to_the_edge_is_one_watertight_solid(kw):
+    shape = build_outer(resolved(mesh_to_edge=True, **kw), CLEAR)
+    assert shape.isValid() and len(shape.Solids) == 1
+    mesh = MeshPart.meshFromShape(Shape=shape, LinearDeflection=0.05, AngularDeflection=0.2618)
+    assert mesh.isSolid() and not mesh.hasNonManifolds()  # a valid shape can still mesh with a seam left open
+
+
+# ---- wire mesh clamped behind a printed mesh
+
+
+@pytest.mark.parametrize("kw", [dict(mesh="grid"), dict(mesh="grid", mesh_to_edge=True),
+                                dict(mesh="honeycomb", fixing="centre_bolt", mesh_to_edge=True), dict(mesh="slicer")])
+def test_added_wire_moves_the_outer_piece_without_changing_its_shape(kw):
+    plain = build_outer(resolved(**kw), CLEAR)
+    lifted = build_outer(resolved(add_wire=True, **kw), CLEAR)
+    assert lifted.BoundBox.ZMin == pytest.approx(0.5)
+    assert lifted.Volume == pytest.approx(plain.Volume, rel=1e-6)
+    lifted.translate(V(0, 0, -0.5))
+    assert lifted.cut(plain).Volume == pytest.approx(0, abs=1e-3)
+
+
+def test_added_wire_leaves_the_inner_piece_as_it_was():
+    for kw in (dict(mesh="grid"), dict(mesh="grid", fixing="centre_bolt")):
+        plain = build_inner(resolved(**kw), CLEAR)
+        wired = build_inner(resolved(add_wire=True, **kw), CLEAR)
+        assert wired.Volume == pytest.approx(plain.Volume, rel=1e-9)
+        assert wired.BoundBox.ZMax == pytest.approx(plain.BoundBox.ZMax)
+
+
+def test_the_slicer_zone_moves_with_the_outer_piece():
+    assert build_mesh_zone(resolved(mesh="slicer", add_wire=True)).BoundBox.ZMin == pytest.approx(0.5)
+
+
+def test_hubs_leave_their_gap_with_the_wire_in_place():
+    # outer hub at z = 0.5, inner hub's top at -2 + 1.5 = -0.5: 1 mm apart, less the 0.5 mm wire leaves the 0.5 mm gap
+    p = resolved(mesh="grid", fixing="centre_bolt", add_wire=True)
+    assert build_outer(p, CLEAR).BoundBox.ZMin == pytest.approx(0.5)
+    assert build_inner(p, CLEAR).BoundBox.ZMax == pytest.approx(-0.3)  # the collar stands above the hub stop
+    assert solid_at(build_inner(p, CLEAR), 5, 0, -0.6) and not solid_at(build_inner(p, CLEAR), 5, 0, -0.4)
+
+
+@pytest.mark.parametrize("kw", [dict(mesh="grid", mesh_to_edge=True), dict(mesh="honeycomb"),
+                                dict(mesh="grid", fixing="centre_bolt", mesh_to_edge=True),
+                                dict(mesh="grid", fixing="one_piece", mesh_to_edge=True)])
+def test_a_mesh_with_added_wire_is_one_watertight_solid(kw):
+    shape = build_outer(resolved(add_wire=True, **kw), CLEAR)
+    assert shape.isValid() and len(shape.Solids) == 1
+    mesh = MeshPart.meshFromShape(Shape=shape, LinearDeflection=0.05, AngularDeflection=0.2618)
+    assert mesh.isSolid() and not mesh.hasNonManifolds()
+
+
+def test_added_wire_prints_on_the_bed_all_the_same(tmp_path):
+    parts, _ = build(FlangeParams(mesh="grid", add_wire=True), PRINTER)
+    export(parts, tmp_path, title="t", params={}, printer=PRINTER, notes=[])
+    assert Mesh.Mesh(str(tmp_path / "outer.stl")).BoundBox.ZMin == pytest.approx(0, abs=0.01)
 
 
 REFUSED_BUILDABLE = [v for k, v in REFUSED.items() if k != "too_many_cells"]

@@ -61,6 +61,10 @@ class FlangeParams:
     mesh_thickness: float = param(1.2, "thickness of the printed mesh or the slicer's solid area, mm", min=0.4, max=15)
     mesh_angle: float | None = param(None, "printed mesh's angle, degrees (auto: 45 on grid, 0 on honeycomb)",
                                      min=0, max=90)
+    mesh_to_edge: bool = param(False, "run a printed mesh right up to the opening's edges, hubs and bars, clipping holes "
+                               "there so its ribs reach them; off keeps every hole whole, with a solid band around them")
+    add_wire: bool = param(False, "also clamp wire mesh between a printed or slicer mesh and the wall: the outer piece "
+                           "sits off the wall by wire_thickness, and bolt lengths allow for it")
     wire_thickness: float = param(0.5, "wire mesh's thickness, mm", min=0, max=3)
     seal_thickness: float = param(0, "foam tape under the rim, mm: bolt lengths allow for it", min=0, max=5)
     # hardware
@@ -84,9 +88,13 @@ def _seat_r(p: FlangeParams) -> float:
     return p.head_d / 2 + 0.2
 
 
+def uses_wire(p: FlangeParams) -> bool:
+    return p.mesh == "wire" or p.add_wire
+
+
 def outer_z0(p: FlangeParams) -> float:
     """The outer piece's wall side: it stands off the wall by whatever is clamped between them."""
-    return (p.wire_thickness if p.mesh == "wire" else 0) + p.seal_thickness
+    return (p.wire_thickness if uses_wire(p) else 0) + p.seal_thickness
 
 
 def outer_height(p: FlangeParams) -> float:
@@ -214,14 +222,18 @@ def _hub_problems(p: FlangeParams) -> list[str]:
 
 
 def _mesh_problems(p: FlangeParams) -> list[str]:
-    if p.mesh == "wire":
-        return []
     out = []
+    if p.mesh_to_edge and p.mesh not in ("grid", "honeycomb"):
+        out.append(f"mesh_to_edge only applies to a printed mesh: use mesh grid or honeycomb, not {p.mesh}")
+    if p.mesh == "wire":
+        if p.add_wire:
+            out.append("add_wire is for wire behind a printed or slicer mesh: mesh wire already clamps wire")
+        return out
     if p.mesh_thickness > p.outer_thickness:
         out.append(f"mesh_thickness ({p.mesh_thickness:g}) is thicker than outer_thickness ({p.outer_thickness:g})")
     if p.mesh == "slicer":
         return out
-    cells = len(layout.mesh_cells(p))
+    cells = len(layout.mesh_cells(p)) + len(layout.clipped_cells(p))
     if cells == 0:
         out.append(f"mesh_hole ({p.mesh_hole:g}) leaves no holes that fit in this opening")
     if cells > MAX_CELLS:
@@ -260,6 +272,12 @@ def effective(p: FlangeParams) -> tuple[FlangeParams, list[str]]:
     if p.mesh in ("grid", "honeycomb") and p.mesh_hole > FLY_HOLE:
         notes.append(f"mesh: {p.mesh_hole:g} mm holes are over the estimated {FLY_HOLE:g} mm limit, so flies may get "
                      f"through")
+    if p.mesh_to_edge and p.mesh in ("grid", "honeycomb"):
+        hint = "" if p.add_wire else ". add_wire clamps wire mesh behind it"
+        notes.append(f"mesh: holes are clipped at the edges, so the ribs reach them{hint}")
+    if p.add_wire and p.mesh != "wire":
+        notes.append(f"wire: lay {p.wire_thickness:g} mm wire mesh between this piece and the wall, and trim it to the "
+                     f"piece's outline")
     return p, notes
 
 
@@ -276,7 +294,7 @@ def _hardware_note(p: FlangeParams, width: float, height: float) -> str:
     items = [f"{n} × {m}×{bolt_length(p)} countersunk hex-socket bolts (ISO 10642 / DIN 7991)", f"{n} × {m} nuts"]
     if p.fixing == "one_piece":
         items.append(f"{n} × {m} washers")
-    if p.mesh == "wire":
+    if uses_wire(p):
         items.append(f"{width - 2:g} × {height - 2:g} mm of wire mesh, trimmed to the outer piece's outline")
     return f"hardware: {', '.join(items)}"
 
@@ -294,6 +312,8 @@ def _air_note(p: FlangeParams) -> str:
         parts.append("fly screen is typically 60–70% open")
     else:
         parts.append("what's left depends on the infill you choose")
+    if p.add_wire and p.mesh != "wire":
+        parts.append("then the wire behind it: fly screen is typically 60–70% open")
     return ", ".join(parts)
 
 

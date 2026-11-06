@@ -94,3 +94,18 @@ def test_a_failed_zone_writes_nothing(tmp_path):
 
 def test_cli_force_does_not_overrule_a_bad_choice(tmp_path):
     assert _run(tmp_path / "variant", "--shape", "square", "--force").returncode == 2
+
+
+def test_mesh_to_edge_reaches_the_build(tmp_path):
+    out = tmp_path / "variant"
+    run = _run(out, "--mesh", "grid", "--mesh-to-edge")
+    assert run.returncode == 0, run.stderr
+    assert "mesh_to_edge = True" in (out / "summary.txt").read_text()
+
+
+def test_add_wire_reaches_the_build(tmp_path):
+    out = tmp_path / "variant"
+    run = _run(out, "--mesh", "grid", "--add-wire")
+    assert run.returncode == 0, run.stderr
+    summary = (out / "summary.txt").read_text()
+    assert "add_wire = True" in summary and "of wire mesh" in summary

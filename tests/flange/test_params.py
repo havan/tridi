@@ -91,6 +91,9 @@ REFUSED = {
     "no_holes": (dict(shape="slot", mesh="grid", mesh_hole=6, slot_width=10, slot_length=30), "mesh_hole"),
     "bars_leaving_no_room_for_holes": (dict(fixing="centre_bolt", mesh="grid", opening_d=20), "mesh_hole"),
     "too_many_cells": (dict(mesh="grid", opening_d=300, mesh_hole=0.5, mesh_rib=0.4), "mesh_hole"),
+    "to_the_edge_on_wire": (dict(mesh="wire", mesh_to_edge=True), "mesh_to_edge"),
+    "add_wire_on_wire": (dict(mesh="wire", add_wire=True), "add_wire"),
+    "to_the_edge_on_slicer": (dict(mesh="slicer", mesh_to_edge=True), "mesh_to_edge"),
 }
 
 
@@ -206,3 +209,69 @@ def test_notes_report_air():
     assert "1234 mm²" in _note("air:", fixing="centre_bolt")
     assert "60–70%" in _note("air:")
     assert "infill" in _note("air:", mesh="slicer")
+
+
+def test_clipped_holes_count_toward_the_hole_limit():
+    # no whole hole fits in this 10 mm wide slot, but clipped ones do
+    kw = dict(shape="slot", mesh="grid", mesh_hole=6, slot_width=10, slot_length=30)
+    with pytest.raises(ParamError, match="mesh_hole"):
+        resolved(**kw)
+    assert resolved(mesh_to_edge=True, **kw).mesh_to_edge
+
+
+def _edge_note(**kw):
+    return next(n for n in notes(mesh="grid", mesh_to_edge=True, **kw) if "clipped" in n)
+
+
+def test_notes_point_a_mesh_to_the_edge_at_add_wire():
+    assert "add_wire" in _edge_note()
+    assert "add_wire" not in _edge_note(add_wire=True)
+    assert not any("clipped" in n for n in notes(mesh="grid"))
+
+
+# ---- wire mesh clamped behind a printed mesh
+
+
+def test_added_wire_lifts_the_outer_piece_by_its_thickness():
+    assert outer_z0(resolved(mesh="grid")) == 0
+    assert outer_z0(resolved(mesh="grid", add_wire=True)) == pytest.approx(0.5)
+    assert outer_z0(resolved(mesh="grid", add_wire=True, wire_thickness=1, seal_thickness=1)) == pytest.approx(2)
+
+
+def test_added_wire_counts_toward_the_bolt_length():
+    # 4 mm piece + 2.7 mm wall + 1.6 mm ledge + 3.2 mm nut + 1 mm past it - 0.5 mm sink = 12 mm: stock 12.
+    # With 0.5 mm of wire it's 12.5: stock 16
+    assert bolt_length(resolved(mesh="grid", wall_thickness=2.7)) == 12
+    assert bolt_length(resolved(mesh="grid", wall_thickness=2.7, add_wire=True)) == 16
+
+
+def test_default_sizes_keep_the_same_bolts_with_added_wire():
+    # 11.3 mm needed, 11.8 with the wire: both stock 12
+    assert bolt_length(resolved(mesh="grid", add_wire=True)) == 12
+
+
+def test_added_wire_leaves_the_hub_stop_alone():
+    # the wire sits between the hubs, in the gap the outer piece's lift made for it
+    plain = resolved(mesh="grid", fixing="centre_bolt")
+    assert resolved(mesh="grid", fixing="centre_bolt", add_wire=True).hub_stop == plain.hub_stop
+
+
+def test_added_wire_goes_on_the_shopping_list():
+    assert "76 × 76 mm of wire mesh" in _note("hardware:", mesh="grid", add_wire=True)
+    assert "wire mesh" not in _note("hardware:", mesh="grid")
+
+
+@pytest.mark.parametrize("mesh", ["grid", "honeycomb"])
+def test_air_note_counts_the_wire_behind_a_printed_mesh(mesh):
+    air = _note("air:", mesh=mesh, add_wire=True)
+    assert "through the mesh" in air and "fly screen" in air
+    assert "fly screen" not in _note("air:", mesh=mesh)
+
+
+def test_air_note_counts_the_wire_behind_a_slicer_mesh():
+    air = _note("air:", mesh="slicer", add_wire=True)
+    assert "infill" in air and "fly screen" in air
+
+
+def test_notes_say_where_added_wire_goes():
+    assert any("between this piece and the wall" in n for n in notes(mesh="grid", add_wire=True))

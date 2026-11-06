@@ -11,7 +11,7 @@ from FreeCAD import Vector
 
 from tridi.features import GeometryError, assert_single_solid, countersunk_hole, hex_prisms
 
-from .layout import bar_segments, cell_circumradius, hub_xy, mesh_cells, rim_bolt_xy, spine, spine_distance
+from .layout import bar_segments, cell_corners, clipped_cells, hub_xy, mesh_cells, rim_bolt_xy, spine, spine_distance
 from .params import NUT_ROOM, SINK, FlangeParams, hole_d, outer_height, outer_z0
 
 EPS = 1e-6
@@ -88,12 +88,9 @@ def _near(edge, centre: tuple[float, float], reach: float) -> bool:
 
 
 def _cell_wire(p: FlangeParams, x: float, y: float, z: float) -> Part.Wire:
-    """One mesh hole, clockwise: `cutHoles` only cuts wires wound against the face's outline. The first vertex puts
-    the hole's flats square to its lattice neighbours, so the rib between them is mesh_rib wide."""
-    sides, offset = (4, 45) if p.mesh == "grid" else (6, 30)
-    radius = cell_circumradius(p)
-    angles = [math.radians(p.mesh_angle + offset - k * 360 / sides) for k in range(sides + 1)]
-    return Part.makePolygon([Vector(x + radius * math.cos(a), y + radius * math.sin(a), z) for a in angles])
+    """One mesh hole, clockwise: `cutHoles` only cuts wires wound against the face's outline."""
+    corners = cell_corners(p, x, y)
+    return Part.makePolygon([Vector(cx, cy, z) for cx, cy in [*corners, corners[0]]])
 
 
 def _mesh_layer(p: FlangeParams, z0: float, height: float) -> Part.Shape:
@@ -105,6 +102,25 @@ def _mesh_layer(p: FlangeParams, z0: float, height: float) -> Part.Shape:
     if cells:
         face.cutHoles([_cell_wire(p, x, y, z0) for x, y in cells])
     return face.extrude(Vector(0, 0, height))
+
+
+def _opening(p: FlangeParams, z0: float, height: float) -> Part.Shape:
+    """The opening as a solid, less any bars and hubs."""
+    r, s = spine(p)
+    zone = Part.Face(stadium_wire(r, s, z0)).extrude(Vector(0, 0, height))
+    web = _hubs_and_bars(p, z0, height)
+    return zone.cut(web).removeSplitter() if web else zone
+
+
+def _clipped_holes(p: FlangeParams, z0: float, height: float) -> list[Part.Shape]:
+    """The holes crossing an edge, trimmed to it. They run clear through the piece's height, as there's only air over
+    the mesh, so that they don't end on the layer's own faces."""
+    cells = clipped_cells(p)
+    if not cells:
+        return []
+    room = _opening(p, z0 - 1, height + 2)
+    holes = [Part.Face(_cell_wire(p, x, y, z0 - 1)).extrude(Vector(0, 0, height + 2)).common(room) for x, y in cells]
+    return [hole for hole in holes if hole.Volume > EPS]
 
 
 def build_outer(p: FlangeParams, clearance: float) -> Part.Shape:
@@ -128,21 +144,16 @@ def build_outer(p: FlangeParams, clearance: float) -> Part.Shape:
     shape = pieces[0].fuse(pieces[1:]) if len(pieces) > 1 else pieces[0]
     seats = [countersunk_hole(Vector(x, y, top - SINK), Vector(0, 0, 1), thick - SINK, hole_d(p),
                               p.head_d + 2 * clearance) for x, y in _bolts(p)]
-    if seats:
-        shape = shape.cut(seats)
+    cutters = seats + _clipped_holes(p, z0, thick)
+    if cutters:
+        shape = shape.cut(cutters)
     return assert_single_solid(shape.removeSplitter(), "outer piece")
 
 
 def build_mesh_zone(p: FlangeParams) -> Part.Shape:
     """Where the slicer should replace the solid with infill: the opening, less any bars and hubs. Load it as a
     modifier. It stays one shape with several regions when bars divide the opening."""
-    r, s = spine(p)
-    z0 = outer_z0(p)
-    zone = Part.Face(stadium_wire(r, s, z0)).extrude(Vector(0, 0, p.mesh_thickness))
-    web = _hubs_and_bars(p, z0, p.mesh_thickness)
-    if not web:
-        return zone
-    zone = zone.cut(web).removeSplitter()
+    zone = _opening(p, outer_z0(p), p.mesh_thickness)
     if not zone.Solids:
         raise GeometryError("mesh zone: the hubs and bars fill the opening")
     return zone
