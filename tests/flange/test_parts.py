@@ -102,3 +102,65 @@ def test_both_pieces_print_upright():
 def test_forced_problems_reach_the_notes():
     _, notes = build(FlangeParams(mesh="grid", mesh_rib=0.3, force=True), PRINTER)
     assert any(n.startswith("forced:") and "mesh_rib" in n for n in notes)
+
+
+CENTRE = dict(fixing="centre_bolt")
+
+
+@pytest.mark.parametrize("build_piece,mid_z", [(build_outer, 2.5), (build_inner, -4.5)])
+def test_centre_round_has_one_bolt_through_hubs(build_piece, mid_z):
+    piece = build_piece(resolved(**CENTRE), CLEAR)
+    assert solid_at(piece, 5, 0, mid_z)
+    assert solid_at(piece, 12, 0, mid_z)
+    assert not solid_at(piece, 0, 0, mid_z)
+    assert not solid_at(piece, 12, 12, mid_z)
+    assert (piece.BoundBox.XLength, piece.BoundBox.YLength) == pytest.approx((66, 66), abs=0.01)
+    assert solid_at(piece, 29, 0, mid_z)  # no rim bolts
+
+
+def test_hub_stop_sets_the_gap():
+    p = resolved(**CENTRE)
+    inner_piece = build_inner(p, CLEAR)
+    assert solid_at(inner_piece, 5, 0, -0.2)
+    assert not solid_at(inner_piece, 5, 0, 0.2)
+    assert build_outer(p, CLEAR).BoundBox.ZMin == pytest.approx(0.5)
+
+
+def test_smaller_hub_stop_leaves_a_bigger_gap():
+    inner_piece = build_inner(resolved(hub_stop=0.5, **CENTRE), CLEAR)
+    assert not solid_at(inner_piece, 5, 0, -1.2)
+    assert solid_at(inner_piece, 5, 0, -1.7)
+
+
+def test_no_stop_when_zero():
+    assert not solid_at(build_inner(resolved(hub_stop=0, **CENTRE), CLEAR), 5, 0, -1.9)
+
+
+def test_centre_slot_has_three_hubs_with_cross_bars():
+    p = resolved(shape="slot", **CENTRE)
+    for piece, mid in ((build_outer(p, CLEAR), 2.5), (build_inner(p, CLEAR), -4.5)):
+        assert (piece.BoundBox.XLength, piece.BoundBox.YLength) == pytest.approx((206, 37), abs=0.01)
+        assert solid_at(piece, 190 / 3 + 3, 8, mid)
+        assert not solid_at(piece, 95 / 3, 0, mid)
+        for x in (-190 / 3, 0, 190 / 3):
+            assert not solid_at(piece, x, 0, mid)
+    inner_piece = build_inner(p, CLEAR)
+    for x in (-190 / 3, 0, 190 / 3):
+        assert not solid_at(inner_piece, x + 3, 0, -6.5)  # nut pocket
+        assert solid_at(inner_piece, x + 3, 0, -3)
+
+
+def test_centre_bolt_has_a_collar():
+    inner_piece = build_inner(resolved(**CENTRE), CLEAR)
+    assert solid_at(inner_piece, 25.8 * 0.7071, 25.8 * 0.7071, -1)
+    assert not solid_at(inner_piece, 27.2 * 0.7071, 27.2 * 0.7071, -1)
+
+
+@pytest.mark.parametrize("bars", [2, 3])
+def test_two_and_three_bars_build(bars):
+    p = resolved(bars=bars, **CENTRE)
+    assert build_outer(p, CLEAR).isValid() and build_inner(p, CLEAR).isValid()
+
+
+def test_no_hubs_without_a_centre_bolt(outer):
+    assert not solid_at(outer, 0, 0, 2)

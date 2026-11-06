@@ -4,12 +4,14 @@ runs down to z = -wall_thickness. The slot's long side runs along x. Builders ta
 """
 from __future__ import annotations
 
+import math
+
 import Part
 from FreeCAD import Vector
 
 from tridi.features import assert_single_solid, countersunk_hole, hex_prisms
 
-from .layout import hub_xy, rim_bolt_xy, spine, spine_distance
+from .layout import bar_segments, hub_xy, rim_bolt_xy, spine, spine_distance
 from .params import NUT_ROOM, SINK, FlangeParams, hole_d, outer_z0
 
 EPS = 1e-6
@@ -35,6 +37,22 @@ def _ring(r_out: float, r_in: float, s: float, z0: float, height: float) -> Part
     return _ring_face(r_out, r_in, s, z0).extrude(Vector(0, 0, height))
 
 
+def _hubs_and_bars(p: FlangeParams, z0: float, height: float) -> list[Part.Shape]:
+    """The centre-bolt web. Bars run 0.5 mm into the rim and hub, so the fuse doesn't rest on touching faces."""
+    if p.fixing != "centre_bolt":
+        return []
+    shapes = [Part.makeCylinder(p.hub_d / 2, height, Vector(x, y, z0)) for x, y in hub_xy(p)]
+    for (x0, y0), (x1, y1) in bar_segments(p):
+        along = Vector(x1 - x0, y1 - y0, 0)
+        along.normalize()
+        side = Vector(-along.y, along.x, 0) * (p.bar_width / 2)
+        start = Vector(x0, y0, z0) - along * 0.5
+        end = Vector(x1, y1, z0) + along * 0.5
+        outline = Part.makePolygon([start + side, end + side, end - side, start - side, start + side])
+        shapes.append(Part.Face(outline).extrude(Vector(0, 0, height)))
+    return shapes
+
+
 def _bolts(p: FlangeParams) -> list[tuple[float, float]]:
     return hub_xy(p) if p.fixing == "centre_bolt" else rim_bolt_xy(p)
 
@@ -52,12 +70,20 @@ def _on_outline(edge, radius: float, s: float) -> bool:
     return abs(spine_distance(mid.x, mid.y, s) - radius) < EPS
 
 
+def _near(edge, centre: tuple[float, float], reach: float) -> bool:
+    mid = edge.valueAt((edge.FirstParameter + edge.LastParameter) / 2)
+    return math.hypot(mid.x - centre[0], mid.y - centre[1]) <= reach
+
+
 def build_outer(p: FlangeParams, clearance: float) -> Part.Shape:
     """The visible piece. Bolt heads seat flush in its outside face. It prints wall side down."""
     r, s = spine(p)
     z0 = outer_z0(p)
     top = z0 + p.outer_thickness
     shape = _ring(r + p.rim, r, s, z0, p.outer_thickness)
+    web = _hubs_and_bars(p, z0, p.outer_thickness)
+    if web:
+        shape = shape.fuse(web)
     seats = [countersunk_hole(Vector(x, y, top - SINK), Vector(0, 0, 1), p.outer_thickness - SINK, hole_d(p),
                               p.head_d + 2 * clearance) for x, y in _bolts(p)]
     if seats:
@@ -74,12 +100,23 @@ def build_inner(p: FlangeParams, clearance: float) -> Part.Shape:
     face = -p.wall_thickness
     bed = face - p.inner_thickness
     shape = _ring(r + p.rim, r, s, bed, p.inner_thickness)
+    extras = _hubs_and_bars(p, bed, p.inner_thickness)
     if p.collar_height > 0:
-        shape = shape.fuse(_ring(r + p.collar_wall, r, s, face, p.collar_height))
+        extras.append(_ring(r + p.collar_wall, r, s, face, p.collar_height))
+    if p.hub_stop > 0:
+        extras += [Part.makeCylinder(p.hub_d / 2, p.hub_stop, Vector(x, y, face)) for x, y in hub_xy(p)]
+    if extras:
+        shape = shape.fuse(extras)
     bolts = _bolts(p)
-    holes = [Part.makeCylinder(hole_d(p) / 2, p.inner_thickness + 2, Vector(x, y, bed - 1)) for x, y in bolts]
+    holes = [Part.makeCylinder(hole_d(p) / 2, p.inner_thickness + p.hub_stop + 2, Vector(x, y, bed - 1))
+             for x, y in bolts]
     pockets = [hex_prisms([xy], p.nut_af + clearance, bed - 1, p.nut_height + NUT_ROOM + 1, "y") for xy in bolts]
     if bolts:
         shape = shape.cut(holes + pockets)
     shape = shape.removeSplitter()
-    return assert_single_solid(_chamfer(shape, _bed_edges(shape, bed), p.bed_chamfer), "inner piece")
+    # the outside outline and the nut pockets, where a spread first layer matters. Not the air openings: their corners
+    # against the bars are too tight for the kernel to chamfer, and nothing fits there anyway.
+    reach = (p.nut_af + clearance) / 2 / math.cos(math.pi / 6) + EPS
+    edges = [e for e in _bed_edges(shape, bed)
+             if _on_outline(e, r + p.rim, s) or any(_near(e, xy, reach) for xy in bolts)]
+    return assert_single_solid(_chamfer(shape, edges, p.bed_chamfer), "inner piece")
