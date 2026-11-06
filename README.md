@@ -11,6 +11,7 @@ Every design is Python code: pick the options and sizes you need and get print-r
 | [`fanbox`](projects/fanbox/) | Fan socket, duct and fly-mesh frame for a drying box lid, such as a biltong box |
 | [`flange`](projects/flange/) | Air vent flange for a drying box's side wall, round or long slot, with wire or printed mesh |
 | [`barholder`](projects/barholder/) | Snap-in holders for the bars in a drying box, bolted through its thin wall to a backplate |
+| [`grommet`](projects/grommet/) | Split cable grommet for a thin wall, sized from your measured wire, that fits around a wire already in place |
 
 ## Quick start
 
@@ -63,4 +64,5 @@ pixi resolves Linux, macOS (Apple silicon) and Windows, but only Linux is tested
 
 ## Licence
 
-[CC BY-NC 4.0](LICENSE): share and adapt with attribution, no commercial use.
+[CC BY-NC 4.0](LICENSE): share and adapt with attribution, no commercial use. The exception is `projects/grommet/`, which is
+[CC BY-NC-SA 4.0](projects/grommet/LICENSE) because it follows *Parametric Cable Grommet* by theo.fieber.

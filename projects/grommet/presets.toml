@@ -1,0 +1,17 @@
+# Example presets: pixi run build grommet --preset <name>
+# Put your own in local.toml at the repo root, as [grommet.<name>] tables.
+
+[round_6]
+wire_shape = "round"
+wire_d = 6
+
+[rectangular]
+wire_shape = "flat"
+wire_width = 6
+wire_height = 3
+
+[table]
+wall_thickness = 20
+
+[connector]
+hole_d = 20
