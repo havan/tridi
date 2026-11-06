@@ -98,8 +98,10 @@ def area_after_bars(p: FlangeParams) -> float:
     r, _ = spine(p)
     hub = math.pi * p.hub_d ** 2 / 4
     if p.shape == "round":
-        return area - hub - p.bars * p.bar_width * (r - p.hub_d / 2)
-    return area - p.hubs * (hub + p.bar_width * (2 * r - p.hub_d))
+        left = area - hub - p.bars * p.bar_width * max(r - p.hub_d / 2, 0)
+    else:
+        left = area - p.hubs * (hub + p.bar_width * max(2 * r - p.hub_d, 0))
+    return max(left, 0.0)
 
 
 def cell_circumradius(p: FlangeParams) -> float:

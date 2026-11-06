@@ -84,6 +84,10 @@ def test_no_bars_without_a_centre_bolt():
     assert bar_segments(resolved()) == []
 
 
+def test_area_after_bars_is_never_negative():
+    assert area_after_bars(resolved(fixing="centre_bolt", opening_d=12, hub_d=40, bars=4, force=True)) == 0
+
+
 def test_area_after_bars():
     assert area_after_bars(resolved()) == pytest.approx(math.pi * 625)
     assert area_after_bars(resolved(fixing="centre_bolt")) == pytest.approx(1233.6, abs=0.1)

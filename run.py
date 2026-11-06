@@ -14,10 +14,12 @@ ROOT = Path(__file__).resolve().parent
 sys.path[:0] = [str(ROOT / "src"), str(ROOT)]
 
 import tridi  # noqa: E402,F401
+import FreeCAD  # noqa: E402
 import Part  # noqa: E402
 from tridi.export import export  # noqa: E402
 from tridi.features import GeometryError  # noqa: E402
-from tridi.params import ParamError, add_cli_arguments, cli_overrides, load_presets, resolve, variant_name  # noqa: E402
+from tridi.params import (ParamError, RangeError, add_cli_arguments, cli_overrides, load_presets, resolve,  # noqa: E402
+                          variant_name)
 from tridi.printers import DEFAULT_PRINTER, FitError, get_printer, load_printers  # noqa: E402
 
 
@@ -46,12 +48,17 @@ def build(argv: list[str]) -> int:
     printer = get_printer(args.printer, load_printers())
     presets = load_presets(ROOT / "projects" / known.project / "presets.toml", ROOT / "local.toml", known.project)
     overrides = cli_overrides(project.Params, args)
-    params = resolve(project.Params, presets, args.preset, overrides)
     variant = variant_name(args.preset, overrides)
-    parts, notes = project.build(params, printer)
     out = args.out or ROOT / "out" / known.project / variant
-    summary = export(parts, out, title=variant, params=dataclasses.asdict(params), printer=printer, notes=notes,
-                     force=getattr(params, "force", False))
+    try:
+        params = resolve(project.Params, presets, args.preset, overrides)
+        parts, notes = project.build(params, printer)
+        summary = export(parts, out, title=variant, params=dataclasses.asdict(params), printer=printer, notes=notes,
+                         force=getattr(params, "force", False))
+    except (RangeError, FitError) as e:
+        if any(f.name == "force" for f in dataclasses.fields(project.Params)):
+            raise type(e)(f"{e} (--force builds it anyway)") from None
+        raise
     print(summary.read_text(), end="")
     print(f"\nwrote {out}")
     return 0
@@ -67,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
     except (ParamError, FitError, GeometryError) as e:  # projects raise subclasses of these
         print(f"error: {e}", file=sys.stderr)
         return 2
-    except Part.OCCError as e:
+    except (Part.OCCError, FreeCAD.Base.FreeCADError) as e:
         print(f"error: the geometry kernel failed ({e}); try less extreme values", file=sys.stderr)
         return 2
 

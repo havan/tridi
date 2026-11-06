@@ -9,10 +9,10 @@ import math
 import Part
 from FreeCAD import Vector
 
-from tridi.features import assert_single_solid, countersunk_hole, hex_prisms
+from tridi.features import GeometryError, assert_single_solid, countersunk_hole, hex_prisms
 
 from .layout import bar_segments, cell_circumradius, hub_xy, mesh_cells, rim_bolt_xy, spine, spine_distance
-from .params import NUT_ROOM, SINK, FlangeParams, hole_d, outer_z0
+from .params import NUT_ROOM, SINK, FlangeParams, hole_d, outer_height, outer_z0
 
 EPS = 1e-6
 
@@ -20,6 +20,8 @@ EPS = 1e-6
 def stadium_wire(r: float, s: float, z: float) -> Part.Wire:
     """Counter-clockwise outline around a spine of half-length s along x. A full circle is two arcs, not one closed
     edge: a face with holes cut into it comes out invalid on a one-edge circle."""
+    if r <= 0:
+        raise GeometryError(f"an outline of radius {r:g} mm has nothing to print")
     if s == 0:
         return Part.Wire([Part.Arc(Vector(r, 0, z), Vector(0, r, z), Vector(-r, 0, z)).toShape(),
                           Part.Arc(Vector(-r, 0, z), Vector(0, -r, z), Vector(r, 0, z)).toShape()])
@@ -44,6 +46,8 @@ def _hubs_and_bars(p: FlangeParams, z0: float, height: float) -> list[Part.Shape
     shapes = [Part.makeCylinder(p.hub_d / 2, height, Vector(x, y, z0)) for x, y in hub_xy(p)]
     for (x0, y0), (x1, y1) in bar_segments(p):
         along = Vector(x1 - x0, y1 - y0, 0)
+        if along.Length < EPS:  # a hub as wide as the opening leaves no bar to draw
+            continue
         along.normalize()
         side = Vector(-along.y, along.x, 0) * (p.bar_width / 2)
         start = Vector(x0, y0, z0) - along * 0.5
@@ -63,6 +67,14 @@ def _chamfer(shape: Part.Shape, edges: list, size: float) -> Part.Shape:
 
 def _bed_edges(shape: Part.Shape, z: float) -> list:
     return [e for e in shape.Edges if abs(e.BoundBox.ZMin - z) < EPS and abs(e.BoundBox.ZMax - z) < EPS]
+
+
+def _chamfer_outline(shape: Part.Shape, z: float, radius: float, s: float, size: float, height: float) -> Part.Shape:
+    """Pull in the first layer around the outside. Done on the first layer alone, before anything else joins it: the
+    kernel can't chamfer a round outline after removeSplitter at some sizes, and can't chamfer one beside the seams a
+    fuse leaves either. Never takes the whole layer, however thin it is."""
+    edges = [e for e in _bed_edges(shape, z) if _on_outline(e, radius, s)]
+    return _chamfer(shape, edges, min(size, height / 2))
 
 
 def _on_outline(edge, radius: float, s: float) -> bool:
@@ -101,21 +113,24 @@ def build_outer(p: FlangeParams, clearance: float) -> Part.Shape:
     r, s = spine(p)
     z0 = outer_z0(p)
     layer = 0 if p.mesh == "wire" else p.mesh_thickness
-    thick = max(p.outer_thickness, layer)
+    thick = outer_height(p)
     top = z0 + thick
     pieces = []
     if layer > 0:
-        pieces.append(_mesh_layer(p, z0, layer))
-    if thick > layer:
+        pieces.append(_chamfer_outline(_mesh_layer(p, z0, layer), z0, r + p.rim, s, p.bed_chamfer, layer))
+    if thick > layer and layer <= 0:
+        pieces += [_chamfer_outline(_ring(r + p.rim, r, s, z0, thick), z0, r + p.rim, s, p.bed_chamfer, thick),
+                   *_hubs_and_bars(p, z0, thick)]
+    elif thick > layer:
         pieces += [_ring(r + p.rim, r, s, z0 + layer, thick - layer), *_hubs_and_bars(p, z0 + layer, thick - layer)]
+    if not pieces:
+        raise GeometryError(f"outer piece: outer_thickness ({p.outer_thickness:g}) leaves nothing to print")
     shape = pieces[0].fuse(pieces[1:]) if len(pieces) > 1 else pieces[0]
     seats = [countersunk_hole(Vector(x, y, top - SINK), Vector(0, 0, 1), thick - SINK, hole_d(p),
                               p.head_d + 2 * clearance) for x, y in _bolts(p)]
     if seats:
         shape = shape.cut(seats)
-    shape = shape.removeSplitter()
-    outline = [e for e in _bed_edges(shape, z0) if _on_outline(e, r + p.rim, s)]
-    return assert_single_solid(_chamfer(shape, outline, p.bed_chamfer), "outer piece")
+    return assert_single_solid(shape.removeSplitter(), "outer piece")
 
 
 def build_mesh_zone(p: FlangeParams) -> Part.Shape:
@@ -125,7 +140,12 @@ def build_mesh_zone(p: FlangeParams) -> Part.Shape:
     z0 = outer_z0(p)
     zone = Part.Face(stadium_wire(r, s, z0)).extrude(Vector(0, 0, p.mesh_thickness))
     web = _hubs_and_bars(p, z0, p.mesh_thickness)
-    return zone.cut(web).removeSplitter() if web else zone
+    if not web:
+        return zone
+    zone = zone.cut(web).removeSplitter()
+    if not zone.Solids:
+        raise GeometryError("mesh zone: the hubs and bars fill the opening")
+    return zone
 
 
 def build_inner(p: FlangeParams, clearance: float) -> Part.Shape:
@@ -134,7 +154,8 @@ def build_inner(p: FlangeParams, clearance: float) -> Part.Shape:
     r, s = spine(p)
     face = -p.wall_thickness
     bed = face - p.inner_thickness
-    shape = _ring(r + p.rim, r, s, bed, p.inner_thickness)
+    shape = _chamfer_outline(_ring(r + p.rim, r, s, bed, p.inner_thickness), bed, r + p.rim, s, p.bed_chamfer,
+                             p.inner_thickness)
     extras = _hubs_and_bars(p, bed, p.inner_thickness)
     if p.collar_height > 0:
         extras.append(_ring(r + p.collar_wall, r, s, face, p.collar_height))
@@ -149,9 +170,8 @@ def build_inner(p: FlangeParams, clearance: float) -> Part.Shape:
     if bolts:
         shape = shape.cut(holes + pockets)
     shape = shape.removeSplitter()
-    # the outside outline and the nut pockets, where a spread first layer matters. Not the air openings: their corners
-    # against the bars are too tight for the kernel to chamfer, and nothing fits there anyway.
+    # the nut pockets, where a spread first layer would stop a nut going in. Not the air openings: their corners against
+    # the bars are too tight for the kernel to chamfer, and nothing fits there anyway.
     reach = (p.nut_af + clearance) / 2 / math.cos(math.pi / 6) + EPS
-    edges = [e for e in _bed_edges(shape, bed)
-             if _on_outline(e, r + p.rim, s) or any(_near(e, xy, reach) for xy in bolts)]
+    edges = [e for e in _bed_edges(shape, bed) if any(_near(e, xy, reach) for xy in bolts)]
     return assert_single_solid(_chamfer(shape, edges, p.bed_chamfer), "inner piece")

@@ -51,7 +51,8 @@ hex-socket bolts (ISO 10642 / DIN 7991) and M4 hex nuts (DIN 934: 7 mm across fl
 | Round, centre bolt | 1 of each |
 | Slot, centre bolt | 3 of each |
 
-`one_piece` also needs one M4 washer per bolt. `wire` needs wire fly mesh, cut 2 mm smaller than the outside size.
+`one_piece` also needs one M4 washer per bolt. `wire` needs wire fly mesh: start from the sheet size in the summary,
+which is 2 mm smaller than the outside size, and trim it to the outer piece's outline so no cut edges show.
 
 ## Printing
 
@@ -83,7 +84,7 @@ under the rim. If you use tape, set `--seal-thickness` so the bolt lengths allow
 - `--collar-height`, `--collar-wall`, `--collar-fit`: the lip that fits into the wall hole, centres the flange and
   covers the cut edge. `--collar-height 0` leaves it out.
 - `--hub-stop`: on `centre_bolt`, the boss on the inner hub that stops overtightening from bending the bars. By default
-  it leaves a 0.5 mm gap between the hubs. Make it smaller and the bolt can squeeze the pieces harder. `0` leaves it out.
+  it leaves a 0.5 mm gap between the hubs, with any wire mesh in place. Make it smaller and the bolt can squeeze the pieces harder. `0` leaves it out.
 - `--rim-bolts`, `--hubs`, `--bars`, `--hub-d`, `--bar-width`, `--rim`: fewer bars or narrower ones let more air through.
 - `--mesh-hole`, `--mesh-rib`, `--mesh-thickness`, `--mesh-angle`: the printed mesh.
 
@@ -106,14 +107,21 @@ a larger opening or fewer bars.
 
 `--mesh slicer` exports `outer` with the opening solid, and a `mesh_zone` shape marking where the mesh should be.
 
-1. Load `outer`, then add `mesh_zone` to it as a modifier. In PrusaSlicer, Orca Slicer and Bambu Studio, right-click
-   the object and choose to add a modifier from a file.
-2. Check that the zone sits flat on the bed, inside the opening. Slicers may place it at the object's middle height,
-   in which case move it down. Its files share the outer piece's bed position, for slicers that keep it.
-3. Give the modifier 0 top layers, 0 bottom layers, 0 perimeters or walls, and grid infill. About 45% density with a
-   0.45 mm line should give holes of about 1.5 mm.
+1. Select `outer` and `mesh_zone` together and open them at once. If the slicer offers to treat them as one object
+   with several parts, accept, because that keeps them lined up. Then change `mesh_zone`'s type to a modifier.
+2. If it doesn't offer that, load `outer`, then right-click it and add `mesh_zone` as a modifier from a file. Some
+   slicers then place it by their own rule, so move it into the opening's centre, flat on the bed.
+3. Give the modifier these settings, with a line width of 0.45 mm. About 45% density should give holes of about 1.5 mm.
 
-Check the result in the slicer's preview.
+| Setting | PrusaSlicer | Orca Slicer, Bambu Studio |
+|---|---|---|
+| No solid layers | Top and bottom solid layers: 0 | Top and bottom shell layers: 0 |
+| No outline | Perimeters: 0 | Wall loops: 0 |
+| Pattern | Fill pattern: Grid | Sparse infill pattern: Grid |
+| Density | Fill density: 45% | Sparse infill density: 45% |
+
+Check in the slicer's preview that the mesh appears only inside the opening. These steps are from memory, not tested
+in a slicer yet.
 
 ## Check on a first build
 

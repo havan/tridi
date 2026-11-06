@@ -3,8 +3,8 @@ from dataclasses import dataclass
 
 import pytest
 
-from tridi.params import (ParamError, add_cli_arguments, cli_overrides, load_presets, param, resolve,
-                          variant_name)
+from tridi.params import (ParamError, RangeError, add_cli_arguments, cli_overrides, load_presets, param,
+                          range_problems, resolve, variant_name)
 
 
 @dataclass(frozen=True)
@@ -93,6 +93,22 @@ def test_cli_plural_option_names():
     parser = argparse.ArgumentParser()
     add_cli_arguments(Toy, parser)
     assert "--notch" in parser._option_string_actions
+
+
+@pytest.mark.parametrize("value", ["nan", "inf", "-inf"])
+def test_non_finite_numbers_refused(value):
+    with pytest.raises(ParamError, match="width"):
+        resolve(Toy, {}, None, {"width": value})
+
+
+def test_ranges_raise_a_range_error():
+    with pytest.raises(RangeError):
+        resolve(Toy, {}, None, {"width": 5})
+
+
+def test_range_problems_lists_each_one():
+    assert range_problems(Forceable(width=5)) == ["width = 5 is below the minimum 40"]
+    assert range_problems(Forceable()) == []
 
 
 @dataclass(frozen=True)

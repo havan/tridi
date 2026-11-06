@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import math
 import re
 import tomllib
 import types
@@ -16,6 +17,10 @@ from pathlib import Path
 
 class ParamError(ValueError):
     """A parameter value, name or combination the build refuses."""
+
+
+class RangeError(ParamError):
+    """A number outside its parameter's range."""
 
 
 def param(default, help: str, *, min: float | None = None, max: float | None = None,
@@ -46,19 +51,30 @@ def _fmt(v) -> str:
     return str(v)
 
 
-def validate(obj) -> None:
+def range_problems(obj) -> list[str]:
+    out = []
     for name, (f, base, _optional) in _fields(type(obj)).items():
         value = getattr(obj, name)
-        if value is None:
+        if value is None or base not in (int, float):
             continue
         meta = f.metadata
-        if meta.get("choices") is not None and value not in meta["choices"]:
-            raise ParamError(f"{name} = {value!r} is not one of: {', '.join(map(str, meta['choices']))}")
-        if base in (int, float) and not getattr(obj, "force", False):
-            if meta.get("min") is not None and value < meta["min"]:
-                raise ParamError(f"{name} = {_fmt(value)} is below the minimum {_fmt(meta['min'])}")
-            if meta.get("max") is not None and value > meta["max"]:
-                raise ParamError(f"{name} = {_fmt(value)} is above the maximum {_fmt(meta['max'])}")
+        if meta.get("min") is not None and value < meta["min"]:
+            out.append(f"{name} = {_fmt(value)} is below the minimum {_fmt(meta['min'])}")
+        if meta.get("max") is not None and value > meta["max"]:
+            out.append(f"{name} = {_fmt(value)} is above the maximum {_fmt(meta['max'])}")
+    return out
+
+
+def validate(obj) -> None:
+    """Choices always hold. Ranges don't when the object has a true `force`: the project then reports them."""
+    for name, (f, _base, _optional) in _fields(type(obj)).items():
+        value = getattr(obj, name)
+        choices = f.metadata.get("choices")
+        if value is not None and choices is not None and value not in choices:
+            raise ParamError(f"{name} = {value!r} is not one of: {', '.join(map(str, choices))}")
+    problems = range_problems(obj)
+    if problems and not getattr(obj, "force", False):
+        raise RangeError(problems[0])
 
 
 def _convert(name: str, base: type, optional: bool, value):
@@ -78,7 +94,10 @@ def _convert(name: str, base: type, optional: bool, value):
                 raise ValueError
             return int(value)
         if base is float:
-            return float(value)
+            number = float(value)
+            if not math.isfinite(number):
+                raise ValueError
+            return number
         return str(value)
     except (TypeError, ValueError):
         raise ParamError(f"{name} = {value!r} is not a valid {base.__name__}") from None

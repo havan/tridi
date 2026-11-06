@@ -9,7 +9,7 @@ import dataclasses
 import math
 from dataclasses import dataclass
 
-from tridi.params import ParamError, param
+from tridi.params import ParamError, param, range_problems
 from tridi.printers import Printer
 
 from . import layout
@@ -89,6 +89,11 @@ def outer_z0(p: FlangeParams) -> float:
     return (p.wire_thickness if p.mesh == "wire" else 0) + p.seal_thickness
 
 
+def outer_height(p: FlangeParams) -> float:
+    """The outer piece's real height: a forced mesh can be taller than outer_thickness."""
+    return max(p.outer_thickness, 0 if p.mesh == "wire" else p.mesh_thickness)
+
+
 def nut_ledge(p: FlangeParams) -> float:
     return p.inner_thickness - p.nut_height - NUT_ROOM
 
@@ -96,7 +101,7 @@ def nut_ledge(p: FlangeParams) -> float:
 def _bolt_need(p: FlangeParams) -> float:
     """A countersunk bolt's length includes its head. The tip should clear the nut by 1 mm."""
     backing = p.washer_thickness if p.fixing == "one_piece" else nut_ledge(p)
-    return p.outer_thickness + outer_z0(p) + p.wall_thickness + backing + p.nut_height + 1 - SINK
+    return outer_height(p) + outer_z0(p) + p.wall_thickness + backing + p.nut_height + 1 - SINK
 
 
 def bolt_length(p: FlangeParams) -> int:
@@ -105,7 +110,7 @@ def bolt_length(p: FlangeParams) -> int:
 
 
 def bolt_count(p: FlangeParams) -> int:
-    return p.hubs if p.fixing == "centre_bolt" else p.rim_bolts
+    return len(layout.hub_xy(p)) if p.fixing == "centre_bolt" else p.rim_bolts
 
 
 def wall_hole(p: FlangeParams) -> tuple[float, float]:
@@ -129,7 +134,8 @@ def _resolve_auto(p: FlangeParams) -> FlangeParams:
         resolved = dataclasses.replace(resolved, collar_height=0)
     stop = 0
     if centre:
-        stop = max(outer_z0(resolved) + resolved.wall_thickness - HUB_GAP, 0) if p.hub_stop is None else p.hub_stop
+        # the wire sits between the hubs too, so it isn't part of the gap
+        stop = max(p.wall_thickness + p.seal_thickness - HUB_GAP, 0) if p.hub_stop is None else p.hub_stop
     return dataclasses.replace(resolved, hub_stop=stop)
 
 
@@ -193,18 +199,16 @@ def _hub_problems(p: FlangeParams) -> list[str]:
     if p.bar_width >= p.hub_d:
         out.append(f"bar_width ({p.bar_width:g}) must be under hub_d ({p.hub_d:g})")
     r, _ = layout.spine(p)
+    if p.hub_d > 2 * r - 2:
+        out.append(f"hub_d ({p.hub_d:g}) is too wide for a {2 * r:g} mm opening")
     if p.hubs < 1:
         out.append(f"hubs ({p.hubs}) leaves nothing holding the pieces together")
-    elif p.shape == "slot":
-        if p.hub_d > 2 * r - 2:
-            out.append(f"hub_d ({p.hub_d:g}) is too wide for a {2 * r:g} mm slot")
-        if p.slot_length / p.hubs < p.hub_d + 2:
-            out.append(f"hubs ({p.hubs}) are too close together along a {p.slot_length:g} mm slot")
+    elif p.shape == "slot" and p.slot_length / p.hubs < p.hub_d + 2:
+        out.append(f"hubs ({p.hubs}) are too close together along a {p.slot_length:g} mm slot")
     if layout.area_after_bars(p) <= 0:
         size = "opening_d" if p.shape == "round" else "slot_width"
         out.append(f"{size} is so small the hub and bars fill the opening")
-    gap = outer_z0(p) + p.wall_thickness - p.hub_stop
-    if gap <= 0:
+    if p.wall_thickness + p.seal_thickness - p.hub_stop <= 0:
         out.append(f"hub_stop ({p.hub_stop:g}) leaves no gap between the hubs, so they'd touch before the rim grips")
     return out
 
@@ -247,8 +251,9 @@ def check_printer(p: FlangeParams, printer: Printer) -> list[str]:
 
 def effective(p: FlangeParams) -> tuple[FlangeParams, list[str]]:
     """Fill in the auto values, refuse combinations that can't work, and list what to buy and cut."""
+    given = p
     p = _resolve_auto(p)
-    notes = _settle(p, _problems(p))
+    notes = _settle(p, [*range_problems(given), *_problems(p)])
     width, height = layout.outer_size(p)
     notes += [f"sizes: {width:g} × {height:g} mm outside, {_opening_text(p)} opening", _wall_note(p),
               _hardware_note(p, width, height), _air_note(p)]
@@ -272,7 +277,7 @@ def _hardware_note(p: FlangeParams, width: float, height: float) -> str:
     if p.fixing == "one_piece":
         items.append(f"{n} × {m} washers")
     if p.mesh == "wire":
-        items.append(f"{width - 2:g} × {height - 2:g} mm of wire mesh")
+        items.append(f"{width - 2:g} × {height - 2:g} mm of wire mesh, trimmed to the outer piece's outline")
     return f"hardware: {', '.join(items)}"
 
 
@@ -283,7 +288,8 @@ def _air_note(p: FlangeParams) -> str:
         parts.append(f"{layout.area_after_bars(p):.0f} mm² after hubs and bars")
     if p.mesh in ("grid", "honeycomb"):
         area = layout.open_area(p)
-        parts.append(f"{area:.0f} mm² through the mesh ({area / opening:.0%} of the opening)")
+        share = f" ({area / opening:.0%} of the opening)" if opening > 0 else ""
+        parts.append(f"{area:.0f} mm² through the mesh{share}")
     elif p.mesh == "wire":
         parts.append("fly screen is typically 60–70% open")
     else:

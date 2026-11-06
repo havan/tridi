@@ -28,7 +28,7 @@ def test_every_default_combination_resolves(shape, fixing, mesh):
 
 def test_auto_values():
     assert resolved().collar_height == pytest.approx(1.7)
-    assert resolved(fixing="centre_bolt").hub_stop == pytest.approx(2.0)
+    assert resolved(fixing="centre_bolt").hub_stop == pytest.approx(1.5)
     assert resolved(fixing="centre_bolt", mesh="grid").hub_stop == pytest.approx(1.5)
     assert resolved(fixing="one_piece").collar_height == 0
     assert resolved().hub_stop == 0
@@ -46,12 +46,12 @@ def test_thick_wall_follows():
     p = resolved(wall_thickness=6)
     assert p.collar_height == pytest.approx(5.7)
     assert bolt_length(p) == 16
-    assert resolved(wall_thickness=6, fixing="centre_bolt").hub_stop == pytest.approx(6.0)
+    assert resolved(wall_thickness=6, fixing="centre_bolt").hub_stop == pytest.approx(5.5)
 
 
 def test_seal_adds_to_the_stack():
     assert outer_z0(resolved(seal_thickness=2)) == pytest.approx(2.5)
-    assert resolved(fixing="centre_bolt", seal_thickness=2).hub_stop == pytest.approx(4.0)
+    assert resolved(fixing="centre_bolt", seal_thickness=2).hub_stop == pytest.approx(3.5)
     assert bolt_length(resolved(seal_thickness=2)) == 16
 
 
@@ -74,6 +74,9 @@ REFUSED = {
     "two_bolts_on_round": (dict(rim_bolts=2), "rim_bolts"),
     "collar_as_tall_as_the_wall": (dict(collar_height=2), "collar_height"),
     "hub_stop_with_no_gap": (dict(fixing="centre_bolt", hub_stop=2.5), "hub_stop"),
+    "hub_stop_leaving_no_room_for_the_wire": (dict(fixing="centre_bolt", hub_stop=2), "hub_stop"),
+    "hub_wider_than_round_opening": (dict(fixing="centre_bolt", opening_d=12, bar_width=13), "hub_d"),
+    "big_hub_in_round_opening": (dict(fixing="centre_bolt", opening_d=30, hub_d=40, bar_width=30), "hub_d"),
     "hubs_on_round": (dict(hubs=2), "hubs"),
     "hubs_that_overlap": (dict(shape="slot", fixing="centre_bolt", hubs=12), "hubs"),
     "hub_wider_than_slot": (dict(shape="slot", fixing="centre_bolt", hub_d=20), "hub_d"),
@@ -112,6 +115,35 @@ def test_refusal_message_mentions_force():
 def test_force_turns_refusals_into_notes(kw, field):
     _, out = effective(FlangeParams(force=True, **kw))
     assert any(n.startswith("forced:") and field in n for n in out)
+
+
+@pytest.mark.parametrize("kw,text", [(dict(mesh="grid", mesh_hole=8), "mesh_hole = 8 is above"),
+                                     (dict(seal_thickness=8), "seal_thickness = 8 is above"),
+                                     (dict(wall_thickness=-2), "wall_thickness = -2 is below")])
+def test_force_reports_overruled_ranges(kw, text):
+    assert any(n.startswith("forced:") and text in n for n in notes(force=True, **kw))
+
+
+def test_auto_hub_stop_leaves_half_a_millimetre_after_the_wire():
+    p = resolved(fixing="centre_bolt")
+    assert outer_z0(p) + p.wall_thickness - p.wire_thickness - p.hub_stop == pytest.approx(0.5)
+
+
+@pytest.mark.parametrize("mesh", ["grid", "slicer"])
+def test_forced_thick_mesh_lengthens_bolts(mesh):
+    assert bolt_length(resolved(mesh=mesh, mesh_thickness=8, force=True)) == 16
+
+
+def test_wire_ignores_the_mesh_thickness():
+    assert bolt_length(resolved(mesh_thickness=8)) == 12
+
+
+def test_forced_bolt_count_matches_the_hubs():
+    assert bolt_count(resolved(fixing="centre_bolt", hubs=3, force=True)) == 1
+
+
+def test_wire_note_says_to_trim_it():
+    assert "trim" in _note("hardware:")
 
 
 def test_no_forced_notes_without_a_problem():

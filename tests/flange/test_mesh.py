@@ -4,6 +4,7 @@ import pytest
 
 import tridi  # noqa: F401
 import Mesh
+import Part
 from FreeCAD import Vector as V
 
 from projects.flange import build
@@ -11,7 +12,8 @@ from projects.flange.layout import area_after_bars, mesh_cells, open_area, openi
 from projects.flange.params import FlangeParams, effective
 from projects.flange.parts import build_mesh_zone, build_outer
 from tridi.export import export
-from tridi.features import assert_single_solid
+from tridi.features import GeometryError
+from tests.flange.test_params import REFUSED
 from tridi.printers import get_printer, load_printers
 
 CLEAR = 0.2
@@ -73,6 +75,11 @@ def test_bars_stay_full_thickness_over_the_mesh():
     assert not solid_at(piece, 12, 12, 3)
 
 
+@pytest.mark.parametrize("mesh", ["grid", "slicer"])
+def test_a_mesh_as_thin_as_the_chamfer_builds(mesh):
+    assert build_outer(resolved(mesh=mesh, mesh_thickness=0.4), CLEAR).isValid()
+
+
 def test_slicer_leaves_the_opening_solid():
     piece = build_outer(resolved(mesh="slicer"), CLEAR)
     assert solid_at(piece, 0, 0, 0.6)
@@ -111,6 +118,12 @@ def test_zone_leaves_out_bars_and_hubs():
     assert solid_at(zone, 12, 12, 0.6)
 
 
+def test_zone_with_no_opening_left_is_refused():
+    p = resolved(mesh="slicer", fixing="centre_bolt", opening_d=12, bar_width=13, force=True)
+    with pytest.raises(GeometryError, match="mesh zone"):
+        build_mesh_zone(p)
+
+
 def test_slot_zone_has_four_regions():
     p = resolved(mesh="slicer", fixing="centre_bolt", shape="slot")
     assert len(build_mesh_zone(p).Solids) == 4
@@ -129,3 +142,14 @@ def test_zone_lines_up_on_the_bed(tmp_path):
 def test_forced_mesh_with_no_holes_still_builds():
     p = resolved(shape="slot", mesh="grid", mesh_hole=6, slot_width=10, slot_length=30, force=True)
     assert build_outer(p, CLEAR).isValid()
+
+
+REFUSED_BUILDABLE = [v for k, v in REFUSED.items() if k != "too_many_cells"]
+
+
+@pytest.mark.parametrize("kw,field", REFUSED_BUILDABLE)
+def test_every_forced_refusal_builds_or_fails_cleanly(kw, field):
+    try:
+        build(FlangeParams(force=True, **kw), PRINTER)
+    except (GeometryError, Part.OCCError):
+        pass  # nothing to print, and run.py reports these as errors

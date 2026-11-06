@@ -121,8 +121,8 @@ def test_centre_round_has_one_bolt_through_hubs(build_piece, mid_z):
 def test_hub_stop_sets_the_gap():
     p = resolved(**CENTRE)
     inner_piece = build_inner(p, CLEAR)
-    assert solid_at(inner_piece, 5, 0, -0.2)
-    assert not solid_at(inner_piece, 5, 0, 0.2)
+    assert solid_at(inner_piece, 5, 0, -0.7)
+    assert not solid_at(inner_piece, 5, 0, -0.3)
     assert build_outer(p, CLEAR).BoundBox.ZMin == pytest.approx(0.5)
 
 
@@ -160,6 +160,19 @@ def test_centre_bolt_has_a_collar():
 def test_two_and_three_bars_build(bars):
     p = resolved(bars=bars, **CENTRE)
     assert build_outer(p, CLEAR).isValid() and build_inner(p, CLEAR).isValid()
+
+
+@pytest.mark.parametrize("opening_d", [155, 165, 170, 195, 225])
+def test_large_round_flanges_build(opening_d):
+    p = resolved(opening_d=opening_d)
+    assert build_outer(p, CLEAR).isValid() and build_inner(p, CLEAR).isValid()
+
+
+def test_first_layer_is_pulled_in_around_the_outline(outer, inner):
+    assert not solid_at(outer, 38.9, 0, 0.55)
+    assert solid_at(outer, 38.9, 0, 1.5)
+    assert not solid_at(inner, 38.9, 0, -6.95)
+    assert solid_at(inner, 38.9, 0, -6)
 
 
 def test_no_hubs_without_a_centre_bolt(outer):
